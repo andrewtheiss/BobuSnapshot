@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EIP-2612 Permit Generator (Remix params)</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #60a5fa;
+      --error: #f87171;
+      --ok: #34d399;
+      --warning: #fbbf24;
+      --border: #1f2937;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    .container {
+      max-width: 980px;
+      margin: 24px auto 80px;
+      padding: 0 16px;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 16px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .row-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+    .row-4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 12px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    input[type="text"], input[type="number"], textarea {
+      background: #0b1220;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+    input[readonly], textarea[readonly] {
+      opacity: 0.9;
+    }
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    button {
+      background: var(--accent);
+      color: #001123;
+      border: 0;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.secondary { background: #374151; color: var(--text); }
+    button.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .status { font-size: 12px; color: var(--muted); }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--error); }
+    .hint { font-size: 12px; color: var(--muted); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .divider { height: 1px; background: var(--border); margin: 12px 0; }
+    .section-title { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    .nowrap { white-space: nowrap; }
+    .flex { display: flex; align-items: center; gap: 8px; }
+    @media (max-width: 860px) {
+      .row, .row-3, .row-4 { grid-template-columns: 1fr; }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>EIP-2612 Permit Generator → Remix params for depositUSDC</h1>
+
+    <div class="card" id="walletCard">
+      <div class="row">
+        <div class="field">
+          <label>Wallet</label>
+          <div class="flex">
+            <button id="connectBtn">Connect MetaMask</button>
+            <span class="status" id="walletStatus">Not connected</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>Network</label>
+          <div class="flex">
+            <span class="status" id="networkLabel">-</span>
+            <button class="ghost" id="refreshNetworkBtn" title="Refresh network & token info">Refresh</button>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Connected Address</label>
+          <input id="ownerAddr" type="text" class="mono" readonly />
+        </div>
+        <div class="field">
+          <label>Owner Nonce (EIP-2612)</label>
+          <input id="ownerNonce" type="text" class="mono" readonly />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Inputs</div>
+      <div class="row">
+        <div class="field">
+          <label>Token (ERC-20 with EIP-2612) Address</label>
+          <input id="tokenAddr" type="text" placeholder="0x... USDC token address" class="mono" />
+        </div>
+        <div class="field">
+          <label>Spender (Exchange contract) Address</label>
+          <input id="spenderAddr" type="text" placeholder="0x... Exchange contract address" class="mono" />
+        </div>
+      </div>
+
+      <div class="row-3">
+        <div class="field">
+          <label>Amount (human units)</label>
+          <input id="amountHuman" type="text" placeholder="e.g. 10.5" />
+          <div class="hint">Uses token decimals (auto-fetched) to compute uint256 amount.</div>
+        </div>
+        <div class="field">
+          <label>Deadline in minutes (from now)</label>
+          <input id="deadlineMins" type="number" min="1" step="1" value="30" />
+          <div class="hint">Default: 30 minutes</div>
+        </div>
+        <div class="field">
+          <label>Token Decimals (auto)</label>
+          <input id="tokenDecimals" type="number" min="0" step="1" placeholder="auto" />
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-title">Token Info (auto, editable)</div>
+      <div class="row-3">
+        <div class="field">
+          <label>Token Name</label>
+          <input id="tokenName" type="text" placeholder="auto" />
+        </div>
+        <div class="field">
+          <label>Domain Version</label>
+          <input id="domainVersion" type="text" placeholder="1" />
+          <div class="hint">If signature fails, try adjusting (e.g., 1 or 2)</div>
+        </div>
+        <div class="field">
+          <label>Chain ID</label>
+          <input id="chainId" type="number" min="1" step="1" readonly />
+        </div>
+      </div>
+
+      <div class="buttons">
+        <button id="loadTokenBtn" class="secondary">Load Token Info</button>
+        <button id="generateBtn">Generate Permit</button>
+      </div>
+      <div class="hint">You must connect MetaMask first. Ensure the selected network matches the token chain.</div>
+      <div class="hint">USDC often uses 6 decimals.</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Outputs (use in Remix → depositUSDC(uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s))</div>
+      <div class="row-4">
+        <div class="field">
+          <label>amount (uint256)</label>
+          <input id="outAmount" type="text" class="mono" readonly />
+        </div>
+        <div class="field">
+          <label>deadline (uint256, unix seconds)</label>
+          <input id="outDeadline" type="text" class="mono" readonly />
+        </div>
+        <div class="field">
+          <label>v (uint8)</label>
+          <input id="outV" type="text" class="mono" readonly />
+        </div>
+        <div class="field">
+          <label>r (bytes32)</label>
+          <input id="outR" type="text" class="mono" readonly />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>s (bytes32)</label>
+          <input id="outS" type="text" class="mono" readonly />
+        </div>
+        <div class="field">
+          <label>Remix Args (comma-separated)</label>
+          <input id="outArgs" type="text" class="mono" readonly />
+        </div>
+      </div>
+      <div class="buttons">
+        <button class="ghost" data-copy="outAmount">Copy amount</button>
+        <button class="ghost" data-copy="outDeadline">Copy deadline</button>
+        <button class="ghost" data-copy="outV">Copy v</button>
+        <button class="ghost" data-copy="outR">Copy r</button>
+        <button class="ghost" data-copy="outS">Copy s</button>
+        <button class="secondary" id="copyArgsBtn">Copy all as args</button>
+      </div>
+      <div class="hint">Amount is in smallest units. Example: for USDC with 6 decimals, 10.5 → 10500000.</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Debug</div>
+      <div class="row">
+        <div class="field">
+          <label>Typed Data (domain)</label>
+          <textarea id="dbgDomain" class="mono" readonly></textarea>
+        </div>
+        <div class="field">
+          <label>Typed Data (message)</label>
+          <textarea id="dbgMessage" class="mono" readonly></textarea>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Signature</label>
+          <input id="dbgSig" type="text" class="mono" readonly />
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <input id="dbgStatus" type="text" class="mono" readonly />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Tips</div>
+      <ul>
+        <li>Ensure the MetaMask network matches the token's chain.</li>
+        <li>If the signature doesn't work, try adjusting Domain Version (1 or 2) and re-sign.</li>
+        <li>Confirm the token implements EIP-2612: it should have <span class="mono">permit</span> and <span class="mono">nonces</span>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // Minimal ABIs
+    const ERC20_METADATA_ABI = [
+      "function name() view returns (string)",
+      "function decimals() view returns (uint8)",
+    ];
+    const EIP2612_ABI = [
+      "function nonces(address) view returns (uint256)",
+      "function version() view returns (string)", // optional; may revert
+    ];
+
+    /** @type {ethers.providers.Web3Provider | null} */
+    let provider = null;
+    /** @type {ethers.Signer | null} */
+    let signer = null;
+    let ownerAddress = null;
+
+    const $ = (id) => document.getElementById(id);
+
+    function setStatus(el, text, cls = "") {
+      el.value !== undefined ? el.value = text : el.textContent = text;
+      el.classList.remove("ok", "err");
+      if (cls) el.classList.add(cls);
+    }
+
+    async function connectWallet() {
+      try {
+        if (!window.ethereum) throw new Error("MetaMask not found");
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+        ownerAddress = await signer.getAddress();
+        setStatus($("walletStatus"), `Connected`, "ok");
+        $("ownerAddr").value = ownerAddress;
+        await refreshNetworkAndMaybeToken();
+        // Listen for network/account changes
+        if (window.ethereum && window.ethereum.on) {
+          window.ethereum.on('chainChanged', () => location.reload());
+          window.ethereum.on('accountsChanged', () => location.reload());
+        }
+      } catch (err) {
+        console.error(err);
+        setStatus($("walletStatus"), err.message || String(err), "err");
+      }
+    }
+
+    function checksum(addr) {
+      try { return ethers.utils.getAddress(addr); } catch { return addr; }
+    }
+
+    async function refreshNetworkAndMaybeToken(loadToken = true) {
+      if (!provider) return;
+      const net = await provider.getNetwork();
+      $("networkLabel").textContent = `${net.name || 'network'} (chainId ${net.chainId})`;
+      $("chainId").value = String(net.chainId);
+      if (loadToken) await loadTokenInfo();
+    }
+
+    async function tryCall(contract, fn, defaultValue = undefined) {
+      try { return await contract[fn](); } catch { return defaultValue; }
+    }
+
+    async function loadTokenInfo() {
+      const tokenAddr = $("tokenAddr").value.trim();
+      if (!tokenAddr) return;
+      if (!provider) throw new Error("Connect wallet first");
+
+      const contract = new ethers.Contract(tokenAddr, [...ERC20_METADATA_ABI, ...EIP2612_ABI], provider);
+      const [name, decimals, version] = await Promise.all([
+        tryCall(contract, 'name', ''),
+        tryCall(contract, 'decimals', 18),
+        tryCall(contract, 'version', '1'),
+      ]);
+
+      $("tokenName").value = name || '';
+      $("tokenDecimals").value = String(decimals);
+      $("domainVersion").value = version || '1';
+
+      if (ownerAddress) {
+        try {
+          const nonce = await contract.nonces(ownerAddress);
+          $("ownerNonce").value = nonce.toString();
+        } catch (e) {
+          $("ownerNonce").value = '';
+        }
+      }
+    }
+
+    function toUint256Hex(value) {
+      return ethers.utils.hexZeroPad(ethers.BigNumber.from(value).toHexString(), 32);
+    }
+
+    async function generatePermit() {
+      const dbgStatus = $("dbgStatus");
+      setStatus(dbgStatus, "", "");
+
+      try {
+        if (!provider || !signer || !ownerAddress) throw new Error("Connect wallet first");
+
+        const tokenAddr = $("tokenAddr").value.trim();
+        const spenderAddr = $("spenderAddr").value.trim();
+        if (!ethers.utils.isAddress(tokenAddr)) throw new Error("Invalid token address");
+        if (!ethers.utils.isAddress(spenderAddr)) throw new Error("Invalid spender address");
+
+        const decimalsInput = $("tokenDecimals").value.trim();
+        const decimals = decimalsInput ? parseInt(decimalsInput, 10) : 18;
+
+        const amountHuman = $("amountHuman").value.trim();
+        if (!amountHuman) throw new Error("Enter amount in human units");
+        const amountBN = ethers.utils.parseUnits(amountHuman, decimals);
+
+        const mins = parseInt($("deadlineMins").value || '30', 10);
+        const nowSec = Math.floor(Date.now() / 1000);
+        const deadline = nowSec + (mins * 60);
+
+        const net = await provider.getNetwork();
+        const chainId = Number($("chainId").value || net.chainId);
+
+        const token = new ethers.Contract(tokenAddr, EIP2612_ABI, provider);
+        const nonce = await token.nonces(ownerAddress);
+        $("ownerNonce").value = nonce.toString();
+
+        const name = $("tokenName").value.trim() || (await tryCall(new ethers.Contract(tokenAddr, ERC20_METADATA_ABI, provider), 'name', ''));
+        const version = $("domainVersion").value.trim() || '1';
+
+        const domain = { name, version, chainId, verifyingContract: checksum(tokenAddr) };
+        const types = {
+          Permit: [
+            { name: 'owner', type: 'address' },
+            { name: 'spender', type: 'address' },
+            { name: 'value', type: 'uint256' },
+            { name: 'nonce', type: 'uint256' },
+            { name: 'deadline', type: 'uint256' },
+          ]
+        };
+        const message = {
+          owner: checksum(ownerAddress),
+          spender: checksum(spenderAddr),
+          value: amountBN.toString(),
+          nonce: nonce.toString(),
+          deadline: String(deadline),
+        };
+
+        $("dbgDomain").value = JSON.stringify(domain, null, 2);
+        $("dbgMessage").value = JSON.stringify(message, null, 2);
+
+        const sig = await signer._signTypedData(domain, types, message);
+        $("dbgSig").value = sig;
+        const { v, r, s } = ethers.utils.splitSignature(sig);
+
+        // Populate outputs for Remix
+        $("outAmount").value = amountBN.toString();
+        $("outDeadline").value = String(deadline);
+        $("outV").value = String(v);
+        $("outR").value = ethers.utils.hexZeroPad(r, 32);
+        $("outS").value = ethers.utils.hexZeroPad(s, 32);
+        $("outArgs").value = `${amountBN.toString()}, ${deadline}, ${v}, ${ethers.utils.hexZeroPad(r,32)}, ${ethers.utils.hexZeroPad(s,32)}`;
+
+        setStatus(dbgStatus, "Success. Values ready for Remix.", "ok");
+      } catch (err) {
+        console.error(err);
+        setStatus($("dbgStatus"), err.message || String(err), "err");
+      }
+    }
+
+    async function copyById(id) {
+      const el = $(id);
+      const text = el?.value ?? el?.textContent ?? '';
+      if (!text) return;
+      await navigator.clipboard.writeText(text);
+    }
+
+    // Wire up events
+    $("connectBtn").addEventListener('click', connectWallet);
+    $("refreshNetworkBtn").addEventListener('click', () => refreshNetworkAndMaybeToken(false));
+    $("loadTokenBtn").addEventListener('click', loadTokenInfo);
+    $("generateBtn").addEventListener('click', generatePermit);
+    document.querySelectorAll('button[data-copy]').forEach(btn => {
+      btn.addEventListener('click', () => copyById(btn.getAttribute('data-copy')));
+    });
+    $("copyArgsBtn").addEventListener('click', () => copyById('outArgs'));
+
+    // Auto-connect if already authorized
+    window.addEventListener('load', async () => {
+      if (window.ethereum && window.ethereum.selectedAddress) {
+        try { await connectWallet(); } catch {}
+      }
+    });
+  </script>
+</body>
+</html>
+
+
