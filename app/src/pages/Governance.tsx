@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { JSX } from 'react'
-import { useAccount } from 'wagmi'
+import { useAccount, useConnect, useDisconnect } from 'wagmi'
 import './Governance.css'
 import bobuAvatar from '../assets/bobuthefarmer.webp'
 
@@ -133,7 +133,10 @@ function SnapshotSidebar() {
 }
 
 function SnapshotHeader() {
-  const { isConnected } = useAccount()
+  const { isConnected, address } = useAccount()
+  const { connect, connectors, isPending: isConnecting } = useConnect()
+  const { disconnect, isPending: isDisconnecting } = useDisconnect()
+  const preferred = connectors.find((c) => c.id === 'metaMask') ?? connectors[0]
 
   return (
     <header className="snapshot-header">
@@ -163,14 +166,27 @@ function SnapshotHeader() {
       </form>
 
       <div className="snapshot-header-actions">
-        <button type="button" className="snapshot-header-button">
+        <button
+          type="button"
+          className="snapshot-header-button"
+          disabled={isConnecting || isDisconnecting}
+          onClick={() => {
+            if (isConnected) {
+              disconnect()
+            } else {
+              connect({ connector: preferred })
+            }
+          }}
+        >
           {isConnected ? (
             <>
               <span className="snapshot-header-wallet-dot" />
-              <span className="snapshot-header-wallet-address">0x1234...5678</span>
+              <span className="snapshot-header-wallet-address">
+                {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connected'}
+              </span>
             </>
           ) : (
-            <span>Log in</span>
+            <span>{isConnecting ? 'Connecting…' : 'Log in'}</span>
           )}
         </button>
         <button type="button" className="snapshot-header-button snapshot-header-button-icon" aria-label="Toggle theme">

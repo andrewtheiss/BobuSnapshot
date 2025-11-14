@@ -2,3 +2,5 @@
 .build/
 
 .env
+
+tests/__pycache__/
