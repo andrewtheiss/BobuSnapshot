@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { isAddress } from 'viem'
+import { ACTIVE_CONTRACTS } from '../config/contracts'
 
 type ProposalContractAddressContextValue = {
   proposalContractAddress: `0x${string}` | ''
@@ -9,17 +10,17 @@ type ProposalContractAddressContextValue = {
 
 const ProposalContractAddressContext = createContext<ProposalContractAddressContextValue | undefined>(undefined)
 
-const DEFAULT_ADDR = '0x1234567890123456789012345678901234567890' as `0x${string}` // Placeholder - needs actual address
+// Default address is selected from the env-aware contracts config
+const DEFAULT_ADDR = ACTIVE_CONTRACTS.proposalContract.address
 
 export function ProposalContractAddressProvider({ children }: { children: ReactNode }) {
-  const [proposalContractAddress, setProposalContractAddress] = useState<`0x${string}` | ''>('')
+  const [proposalContractAddress, setProposalContractAddress] =
+    useState<`0x${string}` | ''>(DEFAULT_ADDR)
 
   useEffect(() => {
     const saved = localStorage.getItem('proposalContractAddress')
     if (saved && isAddress(saved)) {
       setProposalContractAddress(saved as `0x${string}`)
-    } else {
-      setProposalContractAddress(DEFAULT_ADDR)
     }
   }, [])
 

@@ -303,3 +303,20 @@ def test_token_possession_verification_scenario(erc1155_contract, users, account
                        erc1155_contract.balanceOf(owner.address, token_id)
 
     assert total_distributed == mint_amount, "Total supply should be conserved"
+
+
+def test_supports_interface_unknown(erc1155_contract, users):
+    owner, _, _ = users
+    # Unknown interface ID should return False
+    assert not erc1155_contract.supportsInterface(0xFFFFFFFF, sender=owner)
+
+
+def test_balance_of_batch_length_mismatch(erc1155_contract, users):
+    owner, user1, user2 = users
+
+    owners = [user1.address]
+    ids = [1, 2]  # different length from owners
+
+    with pytest.raises(Exception):
+        erc1155_contract.balanceOfBatch(owners, ids)
+

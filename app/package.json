@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "sync:abi": "python ../scripts/sync_proposal_abi.py",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
@@ -27,6 +28,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.22",
     "globals": "^16.4.0",
+    "qr": "^0.5.2",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.45.0",
     "vite": "^7.1.7"

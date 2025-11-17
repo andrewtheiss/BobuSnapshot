@@ -204,3 +204,13 @@ def test_zero_token_balance(erc1155_contract, proposal_contract, users):
     assert not proposal_contract.hasToken(user1.address)
     with pytest.raises(Exception):
         proposal_contract.submitProposal("Should fail", sender=user1)
+
+
+def test_update_token_requirement_zero_address_reverts(erc1155_contract, proposal_contract, users):
+    owner, _, _, _ = users
+
+    with pytest.raises(Exception):
+        proposal_contract.updateTokenRequirement(
+            "0x0000000000000000000000000000000000000000", 1, sender=owner
+        )
+

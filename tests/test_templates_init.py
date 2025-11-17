@@ -211,3 +211,66 @@ def test_comment_template_requires_hub_and_proposal(accounts):
         )
 
 
+def test_comment_template_mark_deleted_direct(accounts, project):
+    deployer, hub_account, proposal_account, author = accounts[0:4]
+    comment = deployer.deploy(project.CommentTemplate)
+
+    # Initialize as if the hub had created it
+    created_at = 123456
+    comment.initialize(
+        hub_account.address,
+        proposal_account.address,
+        author.address,
+        "Comment to delete",
+        created_at,
+        sender=deployer,
+    )
+
+    assert comment.deleted() is False
+
+    # Owner hub can mark it deleted
+    comment.markDeleted(sender=hub_account)
+    assert comment.deleted() is True
+
+
+def test_proposal_template_add_comment_and_vote_direct(accounts, project):
+    deployer, hub_account, commenter, voter = accounts[0:4]
+    template = deployer.deploy(project.ProposalTemplate)
+
+    created_at = 1
+    template.initialize(
+        hub_account.address,
+        "Title",
+        commenter.address,
+        "Body",
+        created_at,
+        0,
+        0,
+        sender=deployer,
+    )
+
+    # Directly append a comment address as the hub
+    template.addCommentAddress(commenter.address, sender=hub_account)
+    comments = template.getComments(0, 10, False)
+    assert len(comments) == 1
+    assert comments[0] == commenter.address
+
+    # Reverse pagination branch
+    comments_rev = template.getComments(0, 10, True)
+    assert comments_rev[0] == commenter.address
+
+    # Cast a vote via hub-only entry point
+    template.hubCastVote(voter.address, True, 1, sender=hub_account)
+    assert template.votesFor() == 1
+    assert template.votesAgainst() == 0
+
+    # Double-vote should revert
+    with pytest.raises(Exception):
+        template.hubCastVote(voter.address, True, 1, sender=hub_account)
+
+    # Zero-weight vote should revert
+    with pytest.raises(Exception):
+        template.hubCastVote(accounts[4].address, True, 0, sender=hub_account)
+
+
+
