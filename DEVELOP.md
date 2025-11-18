@@ -71,3 +71,32 @@ Testing requires more accounts so we need to use foundary:
 ape test --network ethereum:local
 ape test --network ethereum:sepolia:alchemy
 ape test .  --network ethereum:local -n 10
+
+
+### Deploying ProposalContract (Sepolia & Mainnet)
+
+- **Sepolia (testnet)**  
+  - Optional overrides (otherwise ERC1155 is auto-deployed and token ID defaults to `1`):
+    - `export PROPOSAL_TOKEN_CONTRACT=0xYourErc1155Address`  
+    - `export PROPOSAL_TOKEN_ID=1`  
+  - Deploy:
+    - `ape run deploy_proposal_contract --network ethereum:sepolia:alchemy`
+
+- **Mainnet**  
+  - By default uses Bobu ERC1155 at `0x2079812353E2C9409a788FBF5f383fa62aD85bE8` and token ID `1`.  
+  - Optional overrides if you want something else:
+    - `export PROPOSAL_TOKEN_CONTRACT=0xYourErc1155Address`  
+    - `export PROPOSAL_TOKEN_ID=YourTokenId`  
+  - Deploy:
+    - `ape run deploy_proposal_contract --network ethereum:mainnet:alchemy`
+
+- **After any deploy**  
+  - Update the frontend contract config (`app/src/config/contracts.ts`) with the new `ProposalContract` address for the appropriate env (`testnet` or `mainnet`).  
+  - Rebuild or restart the frontend.
+
+
+### Rebuilding ABIs and syncing frontend JSON
+
+- To recompile contracts and sync the `ProposalContract` ABI into `app/src/abis/ProposalContract.json`:
+  - From repo root:
+    - `python scripts/compile_and_sync_proposal_abi.py`
