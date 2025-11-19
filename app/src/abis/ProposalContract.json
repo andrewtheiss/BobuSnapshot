@@ -1,24 +1,24 @@
 [
   {
+    "anonymous": false,
     "inputs": [
       {
-        "internalType": "address",
-        "name": "_tokenContract",
+        "indexed": true,
+        "name": "user",
         "type": "address"
       },
       {
-        "internalType": "uint256",
-        "name": "_tokenId",
-        "type": "uint256"
+        "indexed": false,
+        "name": "proposal",
+        "type": "string"
       }
     ],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
+    "name": "ProposalSubmitted",
+    "type": "event"
   },
   {
     "inputs": [
       {
-        "internalType": "address",
         "name": "user",
         "type": "address"
       }
@@ -26,7 +26,6 @@
     "name": "hasToken",
     "outputs": [
       {
-        "internalType": "bool",
         "name": "",
         "type": "bool"
       }
@@ -37,7 +36,6 @@
   {
     "inputs": [
       {
-        "internalType": "string",
         "name": "proposal",
         "type": "string"
       }
@@ -50,7 +48,6 @@
   {
     "inputs": [
       {
-        "internalType": "address",
         "name": "user",
         "type": "address"
       }
@@ -58,7 +55,6 @@
     "name": "getProposal",
     "outputs": [
       {
-        "internalType": "string",
         "name": "",
         "type": "string"
       }
@@ -69,12 +65,10 @@
   {
     "inputs": [
       {
-        "internalType": "address",
         "name": "_tokenContract",
         "type": "address"
       },
       {
-        "internalType": "uint256",
         "name": "_tokenId",
         "type": "uint256"
       }
@@ -89,7 +83,6 @@
     "name": "tokenContract",
     "outputs": [
       {
-        "internalType": "address",
         "name": "",
         "type": "address"
       }
@@ -102,7 +95,6 @@
     "name": "tokenId",
     "outputs": [
       {
-        "internalType": "uint256",
         "name": "",
         "type": "uint256"
       }
@@ -113,15 +105,13 @@
   {
     "inputs": [
       {
-        "internalType": "address",
-        "name": "",
+        "name": "arg0",
         "type": "address"
       }
     ],
     "name": "proposals",
     "outputs": [
       {
-        "internalType": "string",
         "name": "",
         "type": "string"
       }
@@ -134,7 +124,6 @@
     "name": "owner",
     "outputs": [
       {
-        "internalType": "address",
         "name": "",
         "type": "address"
       }
@@ -143,22 +132,17 @@
     "type": "function"
   },
   {
-    "anonymous": false,
     "inputs": [
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "user",
+        "name": "_tokenContract",
         "type": "address"
       },
       {
-        "indexed": false,
-        "internalType": "string",
-        "name": "proposal",
-        "type": "string"
+        "name": "_tokenId",
+        "type": "uint256"
       }
     ],
-    "name": "ProposalSubmitted",
-    "type": "event"
+    "stateMutability": "nonpayable",
+    "type": "constructor"
   }
 ]

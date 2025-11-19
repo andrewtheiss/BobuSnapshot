@@ -1,8 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { useAccount, useConnect, useDisconnect } from 'wagmi'
 import './Governance.css'
 import bobuAvatar from '../assets/bobuthefarmer.webp'
+import { APP_ENV, IS_MAINNET, IS_TESTNET } from '../config/environment'
+import { hasToken, mintDevToken, type Address } from '../web3/proposalContractActions'
 
 type NavItem = {
   id: string
@@ -220,7 +222,7 @@ function SpaceSummary() {
       <img src={bobuAvatar} alt="Bobu avatar" className="space-summary-avatar" />
       <div className="space-summary-body">
         <div className="space-summary-title">
-          <h1>Bobu</h1>
+          <h1>Bobu Proposal Forum</h1>
           <span className="space-summary-verified" aria-label="Verified space">
             <svg viewBox="0 0 20 20" aria-hidden="true">
               <path
@@ -244,6 +246,106 @@ function SpaceSummary() {
         </p>
       </div>
     </section>
+  )
+}
+
+function DevFooter() {
+  const { address, isConnected } = useAccount()
+  const [status, setStatus] = useState<string | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [hasAccessToken, setHasAccessToken] = useState<boolean | null>(null)
+
+  const isLocalhost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+
+  useEffect(() => {
+    if (!isLocalhost || !isConnected || !address) {
+      setHasAccessToken(null)
+      return
+    }
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        setChecking(true)
+        const result = await hasToken(address as Address)
+        if (!cancelled) {
+          setHasAccessToken(Boolean(result))
+        }
+      } catch {
+        if (!cancelled) {
+          setHasAccessToken(null)
+        }
+      } finally {
+        if (!cancelled) {
+          setChecking(false)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [address, isConnected, isLocalhost])
+
+  if (!isLocalhost) {
+    return null
+  }
+
+  const handleMint = async () => {
+    if (!address) {
+      setStatus('Connect a wallet first.')
+      return
+    }
+    if (!IS_TESTNET) {
+      setStatus('Minting is only enabled on testnet.')
+      return
+    }
+
+    try {
+      setStatus('Sending mint transaction…')
+      await mintDevToken(address as Address)
+      setStatus('Mint transaction submitted. Once it confirms, refresh to re-check access.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setStatus(`Mint failed: ${message.slice(0, 140)}`)
+    }
+  }
+
+  const envLabel = IS_MAINNET ? 'mainnet' : IS_TESTNET ? 'testnet (sepolia)' : APP_ENV
+
+  return (
+    <footer className="dev-footer" aria-label="Developer tools">
+      <div className="dev-footer-inner">
+        <div className="dev-footer-group">
+          <span className="dev-footer-pill">Dev tools (localhost only)</span>
+          <span className="dev-footer-label">
+            Env: <strong>{envLabel}</strong>
+          </span>
+          {isConnected && (
+            <span className="dev-footer-label">
+              Token gate:{' '}
+              {checking
+                ? 'checking…'
+                : hasAccessToken === null
+                  ? 'unknown'
+                  : hasAccessToken
+                    ? 'you have the token'
+                    : 'you do not have the token'}
+            </span>
+          )}
+        </div>
+        {IS_TESTNET && (
+          <div className="dev-footer-actions">
+            <button type="button" className="dev-footer-button" onClick={handleMint}>
+              Mint test access token
+            </button>
+            {status && <span className="dev-footer-status">{status}</span>}
+          </div>
+        )}
+      </div>
+    </footer>
   )
 }
 
@@ -293,26 +395,29 @@ export default function GovernancePage() {
   }, [])
 
   return (
-    <div className="snapshot-layout">
-      <SnapshotSidebar />
-      <div className="snapshot-main">
-        <SnapshotHeader />
-        <div className="snapshot-content">
-          <SpaceHero />
-          <SpaceSummary />
-          <section className="snapshot-section">
-            <header className="snapshot-section-heading">Proposals</header>
-            <div className="proposal-list">
-              {MOCK_PROPOSALS.map((proposal) => (
-                <ProposalRow key={proposal.id} {...proposal} />
-              ))}
-            </div>
-            <a href="#/proposals" className="proposal-see-more">
-              See more
-            </a>
-          </section>
+    <div className="governance-root">
+      <div className="snapshot-layout">
+        <SnapshotSidebar />
+        <div className="snapshot-main">
+          <SnapshotHeader />
+          <div className="snapshot-content">
+            <SpaceHero />
+            <SpaceSummary />
+            <section className="snapshot-section">
+              <header className="snapshot-section-heading">Proposals</header>
+              <div className="proposal-list">
+                {MOCK_PROPOSALS.map((proposal) => (
+                  <ProposalRow key={proposal.id} {...proposal} />
+                ))}
+              </div>
+              <a href="#/proposals" className="proposal-see-more">
+                See more
+              </a>
+            </section>
+          </div>
         </div>
       </div>
+      <DevFooter />
     </div>
   )
 }

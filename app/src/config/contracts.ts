@@ -18,7 +18,7 @@ const CONTRACTS_BY_ENV: ContractsByEnv = {
   testnet: {
     proposalContract: {
       // TODO: replace with your actual sepolia ProposalContract deployment address
-      address: '0x0000000000000000000000000000000000000000',
+      address: '0xaEEA9e94002B63C07f0768B7feF4eb4671D32e22',
       abi: ABIS.ProposalContract,
     },
   },

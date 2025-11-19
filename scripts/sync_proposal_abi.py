@@ -16,24 +16,42 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-# TODO: Update this path to point at your Ape artifact for ProposalContract.
-# Common patterns:
-#   .build/ProposalContract.json
-#   .build/ethereum/sepolia/ProposalContract.json
-#   .build/local/ProposalContract.json
-APE_ARTIFACT = REPO_ROOT / ".build" / "ProposalContract.json"
-
 # Frontend ABI file (this is what wagmi/viem imports)
 FRONTEND_ABI = REPO_ROOT / "app" / "src" / "abis" / "ProposalContract.json"
 
 
+def _find_ape_artifact() -> Path:
+  """
+  Ape is generating a single __local__.json manifest with all ABIs under .build/.
+  We load that file and extract the ProposalContract ABI from the "contractTypes" map.
+  """
+  build_root = REPO_ROOT / ".build"
+  if not build_root.exists():
+    raise SystemExit(f"Ape build folder not found at {build_root}. Run `ape compile` first.")
+
+  manifest = build_root / "__local__.json"
+  if not manifest.exists():
+    raise SystemExit(
+      f"Ape local build manifest not found at {manifest}. "
+      "Ensure `ape compile` ran successfully."
+    )
+
+  print(f"Using Ape manifest at: {manifest}")
+  return manifest
+
+
 def load_abi_from_artifact(path: Path):
   data = json.loads(path.read_text())
-  # Adjust this if Ape stores the ABI under a different key
-  # e.g. data["contract"]["abi"] or data["abi"]
-  if "abi" in data:
-    return data["abi"]
-  raise KeyError("Could not find 'abi' in Ape artifact JSON. Adjust load_abi_from_artifact().")
+  # For the __local__.json manifest, ABIs live under:
+  #   data["contractTypes"]["ProposalContract"]["abi"]
+  ct = data.get("contractTypes") or {}
+  pc = ct.get("ProposalContract")
+  if not pc:
+    raise KeyError("Could not find 'ProposalContract' in Ape manifest contractTypes.")
+  abi = pc.get("abi")
+  if not abi:
+    raise KeyError("Could not find 'abi' for ProposalContract in Ape manifest.")
+  return abi
 
 
 def abi_hash(abi) -> str:
@@ -43,10 +61,9 @@ def abi_hash(abi) -> str:
 
 
 def main():
-  if not APE_ARTIFACT.exists():
-    raise SystemExit(f"Ape artifact not found at {APE_ARTIFACT}. Update APE_ARTIFACT in sync_proposal_abi.py.")
+  ape_artifact = _find_ape_artifact()
 
-  source_abi = load_abi_from_artifact(APE_ARTIFACT)
+  source_abi = load_abi_from_artifact(ape_artifact)
   source_hash = abi_hash(source_abi)
 
   if FRONTEND_ABI.exists():

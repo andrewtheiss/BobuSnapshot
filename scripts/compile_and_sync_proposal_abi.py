@@ -31,7 +31,10 @@ def main() -> None:
 
     # Step 2: Sync ABI into frontend
     print("=== Syncing ProposalContract ABI into frontend ===")
-    from scripts.sync_proposal_abi import main as sync_main
+    # Import relative to the scripts/ directory so this works when run via
+    # `python scripts/compile_and_sync_proposal_abi.py`.
+    sys.path.insert(0, str((repo_root / "scripts").resolve()))
+    from sync_proposal_abi import main as sync_main  # type: ignore[import]
 
     sync_main()
 

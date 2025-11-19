@@ -9,10 +9,17 @@ body.governance-light #root {
   text-align: initial;
 }
 
-.snapshot-layout {
+.governance-root {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #ffffff;
+}
+
+.snapshot-layout {
   background-color: #ffffff;
   color: #0f172a;
+  flex: 1;
 }
 
 .snapshot-sidebar {
@@ -411,6 +418,68 @@ body.governance-light #root {
 
 .proposal-see-more:hover {
   color: #1d4ed8;
+}
+
+.dev-footer {
+  border-top: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+  padding: 10px 24px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.dev-footer-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dev-footer-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dev-footer-pill {
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background-color: #e5e7eb;
+  color: #374151;
+  font-weight: 500;
+}
+
+.dev-footer-label {
+  color: #6b7280;
+}
+
+.dev-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dev-footer-button {
+  border-radius: 9999px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #111827;
+}
+
+.dev-footer-button:hover {
+  background-color: #f3f4f6;
+}
+
+.dev-footer-status {
+  color: #6b7280;
 }
 
 @media (max-width: 1200px) {

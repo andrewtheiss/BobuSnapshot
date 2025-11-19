@@ -42,6 +42,9 @@ After deployment
 """
 
 import os
+import re
+from pathlib import Path
+
 from ape import accounts, networks, project
 
 
@@ -67,6 +70,45 @@ def _get_env(name: str) -> str | None:
     return value.strip()
 
 
+def _update_frontend_contracts(env_key: str, proposal_address: str) -> None:
+    """
+    Patch `app/src/config/contracts.ts` so the correct env entry
+    (`testnet` or `mainnet`) uses the freshly deployed ProposalContract address.
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    ts_path = repo_root / "app" / "src" / "config" / "contracts.ts"
+
+    if not ts_path.exists():
+        print(f"[WARN] contracts.ts not found at {ts_path}, skipping frontend config update.")
+        return
+
+    content = ts_path.read_text(encoding="utf-8")
+
+    # Match the env block and replace the address inside it.
+    # Example we target:
+    #   testnet: {
+    #     proposalContract: {
+    #       address: '0x....',
+    #       abi: ABIS.ProposalContract,
+    #     },
+    #   },
+    pattern = rf"({env_key}:\s*{{\s*.*?address:\s*')0x[0-9a-fA-F]{{40}}(')"
+
+    def _repl(match: re.Match) -> str:  # type: ignore[type-arg]
+        prefix = match.group(1)
+        suffix = match.group(2)
+        return f"{prefix}{proposal_address}{suffix}"
+
+    new_content, count = re.subn(pattern, _repl, content, flags=re.DOTALL)
+
+    if count == 0:
+        print(f"[WARN] Did not find an address entry to update for env '{env_key}' in contracts.ts.")
+        return
+
+    ts_path.write_text(new_content, encoding="utf-8")
+    print(f"[OK] Updated frontend contracts.ts for env '{env_key}' with ProposalContract address {proposal_address}")
+
+
 def main():
     """
     Ape entrypoint. Uses the current `--network` selected via Ape CLI.
@@ -84,8 +126,9 @@ def main():
     deployer = accounts.load(deployer_alias)
     print(f"Deployer address: {deployer.address}")
 
-    # Detect if we're on mainnet
+    # Detect if we're on mainnet / sepolia (for frontend env mapping)
     is_mainnet = network.ecosystem.name == "ethereum" and network.name == "mainnet"
+    is_sepolia = network.ecosystem.name == "ethereum" and network.name == "sepolia"
 
     # Read optional overrides
     token_contract_env = _get_env(ENV_TOKEN_CONTRACT)
@@ -142,4 +185,24 @@ def main():
     print("Deployment complete.")
     print(f"ProposalContract address: {contract.address}")
 
+    # Update frontend contracts.ts mapping based on network
+    try:
+        if is_mainnet:
+            _update_frontend_contracts("mainnet", contract.address)
+        elif is_sepolia:
+            # Frontend uses "testnet" to mean sepolia
+            _update_frontend_contracts("testnet", contract.address)
+        else:
+            print(f"[INFO] Network '{network.name}' not mapped to frontend env (testnet/mainnet); skipping contracts.ts update.")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[WARN] Failed to update frontend contracts.ts: {exc!r}")
+
+    # Optionally sync ABI into frontend (uses existing script)
+    try:
+        from scripts.sync_proposal_abi import main as sync_abi_main
+
+        print("Syncing ProposalContract ABI into frontend...")
+        sync_abi_main()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[WARN] Failed to sync frontend ABI: {exc!r}")
 
