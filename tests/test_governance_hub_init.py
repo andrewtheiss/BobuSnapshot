@@ -12,7 +12,7 @@ def templates(accounts):
     return proposal_template, comment_template
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def governance_hub(accounts, templates):
     deployer = accounts[0]
     bobu = accounts[1]
@@ -433,6 +433,82 @@ def test_admin_delete_comment_direct(governance_hub, accounts, project):
     hub.adminDeleteComment(proposal, comment.address, sender=bobu)
 
 
+def test_set_active_by_creator_or_admin(governance_hub, accounts):
+    hub, bobu, deployer, _, _ = governance_hub
+    proposer = accounts[2]
+    outsider = accounts[5]
+
+    # Create a simple proposal with no voting window (starts as DRAFT)
+    hub.createProposal("Toggle active", "Body", 0, 0, sender=proposer)
+    drafts = hub.getProposals(0, 0, 10, False)
+    assert len(drafts) > 0
+    proposal = drafts[-1]
+
+    # Proposal should start as DRAFT, not ACTIVE
+    assert hub.getProposalCountByState(2) == 0  # STATE_ACTIVE
+
+    # Proposer (author) can mark it ACTIVE
+    hub.setActiveByCreatorOrAdmin(proposal, True, sender=proposer)
+    actives = hub.getProposals(2, 0, 10, False)
+    assert proposal in actives
+
+    # Proposer can also mark it CLOSED
+    hub.setActiveByCreatorOrAdmin(proposal, False, sender=proposer)
+    closeds = hub.getProposals(3, 0, 10, False)
+    assert proposal in closeds
+
+    # Non-author, non-admin cannot toggle
+    with pytest.raises(Exception):
+        hub.setActiveByCreatorOrAdmin(proposal, True, sender=outsider)
+
+    # Admin (bobu) can toggle regardless of author
+    hub.setActiveByCreatorOrAdmin(proposal, True, sender=bobu)
+    actives_after_admin = hub.getProposals(2, 0, 10, False)
+    assert proposal in actives_after_admin
 
 
+def test_get_top_active_proposal_leaderboard(governance_hub, accounts, project, chain):
+    hub, bobu, deployer, _, _ = governance_hub
+    voter1, voter2, voter3 = accounts[2], accounts[3], accounts[4]
+
+    # Configure a voting window in the near future
+    start_ts = chain.pending_timestamp
+    vote_start = start_ts + 10
+    vote_end = start_ts + 1000
+
+    # Create two proposals with the same voting window
+    tx1 = hub.createProposal("P1", "Body1", vote_start, vote_end, sender=voter1)
+    p1 = tx1.return_value
+    tx2 = hub.createProposal("P2", "Body2", vote_start, vote_end, sender=voter2)
+    p2 = tx2.return_value
+
+    # Ensure their state reflects the window relative to current time
+    hub.syncProposalState(p1, sender=deployer)
+    hub.syncProposalState(p2, sender=deployer)
+
+    # They should be OPEN prior to vote_start; fetch most recent entries to avoid pagination/ordering issues
+    opens = hub.getProposals(1, 0, 100, True)
+    assert p1 in opens and p2 in opens
+
+    # Move time into the active voting window
+    chain.mine(timestamp=vote_start + 1)
+
+    # Sync state so that proposals move into ACTIVE
+    hub.syncProposalState(p1, sender=deployer)
+    hub.syncProposalState(p2, sender=deployer)
+
+    # Fetch most recent active proposals
+    actives = hub.getProposals(2, 0, 100, True)
+    assert p1 in actives and p2 in actives
+
+    # Cast votes: make P2 have more total votes than P1
+    hub.castVote(p1, True, sender=voter1)
+
+    hub.castVote(p2, True, sender=voter1)
+    hub.castVote(p2, True, sender=voter2)
+    hub.castVote(p2, False, sender=voter3)
+
+    # Leaderboard: top active proposal should be P2
+    top = hub.getTopActiveProposal()
+    assert top == p2
 

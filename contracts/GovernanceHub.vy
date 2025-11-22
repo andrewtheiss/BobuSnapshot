@@ -23,6 +23,9 @@ interface IProposalTemplate:
     def hubCastVote(_voter: address, support: bool, weight: uint256): nonpayable
     def voteStart() -> uint256: view
     def voteEnd() -> uint256: view
+    def author() -> address: view
+    def votesFor() -> uint256: view
+    def votesAgainst() -> uint256: view
 
 interface ICommentTemplate:
     def initialize(
@@ -377,6 +380,30 @@ def adminMoveState(_proposal: address, _newState: uint256):
     self._moveState(_proposal, _newState)
     log StateChanged(_proposal, old_st, _newState, msg.sender)
 
+
+@external
+def setActiveByCreatorOrAdmin(_proposal: address, _active: bool):
+    """
+    Allow either the proposal's creator (author) or any admin (bobu, hub creator, elected)
+    to mark a proposal as ACTIVE or CLOSED.
+    """
+    # Verify proposal is known
+    old_plus_one: uint256 = self.stateByProposalPlusOne[_proposal]
+    assert old_plus_one > 0, "unknown proposal"
+    old_st: uint256 = old_plus_one - 1
+
+    # Check caller permissions: author OR admin
+    author: address = staticcall IProposalTemplate(_proposal).author()
+    if msg.sender != author:
+        self._onlyAdminOrBobu()
+
+    new_st: uint256 = STATE_ACTIVE if _active else STATE_CLOSED
+    if new_st == old_st:
+        return
+
+    self._moveState(_proposal, new_st)
+    log StateChanged(_proposal, old_st, new_st, msg.sender)
+
 @external
 def syncProposalState(_proposal: address):
     old_plus_one: uint256 = self.stateByProposalPlusOne[_proposal]
@@ -467,5 +494,30 @@ def getProposals(_state: uint256, _offset: uint256, _count: uint256, reverse: bo
             else:
                 result.append(self.closedProposals[idx])
     return result
+
+
+@external
+@view
+def getTopActiveProposal() -> address:
+    """
+    Return the active proposal with the highest total votes (for + against).
+    If there are no active proposals, returns the zero address.
+    """
+    best: address = empty(address)
+    best_votes: uint256 = 0
+    count: uint256 = len(self.activeProposals)
+
+    for i: uint256 in range(MAX_PROPOSALS):
+        if i >= count:
+            break
+        p: address = self.activeProposals[i]
+        vf: uint256 = staticcall IProposalTemplate(p).votesFor()
+        va: uint256 = staticcall IProposalTemplate(p).votesAgainst()
+        total: uint256 = vf + va
+        if total > best_votes:
+            best_votes = total
+            best = p
+
+    return best
 
 

@@ -1,18 +1,14 @@
 import { createConfig, http } from 'wagmi'
 import { mainnet, sepolia } from 'wagmi/chains'
 import { metaMask } from 'wagmi/connectors'
-import { APP_ENV } from '../config/environment'
-
-// Choose a single active chain based on environment:
-// - testnet -> sepolia
-// - mainnet -> Ethereum mainnet
-const activeChain = APP_ENV === 'testnet' ? sepolia : mainnet
 
 export const wagmiConfig = createConfig({
-  chains: [activeChain],
+  // Support both mainnet and sepolia; app logic can still prefer one via APP_ENV
+  chains: [mainnet, sepolia],
   connectors: [metaMask()],
   transports: {
-    [activeChain.id]: http(),
+    [mainnet.id]: http(),
+    [sepolia.id]: http(),
   },
   ssr: false,
 })
