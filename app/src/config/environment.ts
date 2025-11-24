@@ -8,4 +8,15 @@ export const APP_ENV: AppEnvironment =
 export const IS_TESTNET = APP_ENV === 'testnet'
 export const IS_MAINNET = APP_ENV === 'mainnet'
 
+// When running on localhost, force testnet (sepolia) behavior regardless of APP_ENV.
+export const IS_LOCALHOST =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+
+export const ACTIVE_ENV: AppEnvironment = IS_LOCALHOST ? 'testnet' : APP_ENV
+
+// Chain ids for active environment
+import { mainnet, sepolia } from 'wagmi/chains'
+export const ACTIVE_CHAIN_ID: number = ACTIVE_ENV === 'testnet' ? sepolia.id : mainnet.id
+
 

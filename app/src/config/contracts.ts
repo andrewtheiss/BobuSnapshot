@@ -1,5 +1,5 @@
 import { ABIS } from '../abis'
-import { APP_ENV } from './environment'
+import { ACTIVE_ENV } from './environment'
 
 type Env = 'testnet' | 'mainnet'
 
@@ -18,7 +18,7 @@ const CONTRACTS_BY_ENV: ContractsByEnv = {
   testnet: {
     proposalContract: {
       // TODO: replace with your actual sepolia ProposalContract deployment address
-      address: '0xaEEA9e94002B63C07f0768B7feF4eb4671D32e22',
+      address: '0x975553Df55A54c8c365100Abd7c58102cF874F32',
       abi: ABIS.ProposalContract,
     },
   },
@@ -31,6 +31,6 @@ const CONTRACTS_BY_ENV: ContractsByEnv = {
   },
 }
 
-export const ACTIVE_CONTRACTS = CONTRACTS_BY_ENV[APP_ENV]
+export const ACTIVE_CONTRACTS = CONTRACTS_BY_ENV[ACTIVE_ENV]
 
 

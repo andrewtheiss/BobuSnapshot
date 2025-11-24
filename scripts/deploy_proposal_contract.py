@@ -24,26 +24,39 @@ Usage examples
        # this script deploys a fresh ERC1155 and uses it.
        ape run deploy_proposal_contract --network ethereum:sepolia:alchemy
 
-3) Deploy to Mainnet:
+3) Force rebuild + re-export ABIs + redeploy on Sepolia:
+
+       # '--' passes args through to the script
+       ape run deploy_proposal_contract --network ethereum:sepolia:alchemy -- --force
+
+   Also force deploying a brand-new ERC1155 (ignoring PROPOSAL_TOKEN_CONTRACT):
+
+       ape run deploy_proposal_contract --network ethereum:sepolia:alchemy -- --force --fresh-erc1155
+
+4) Deploy to Mainnet:
 
        # On mainnet, if no overrides are set, this script uses
        # the existing Bobu ERC1155 contract as the gate.
        ape run deploy_proposal_contract --network ethereum:mainnet:alchemy
 
+Env-based alternatives
+----------------------
+Instead of CLI flags, you can use env vars:
+  - FORCE_REDEPLOY=1           -> same as '--force'
+  - FORCE_DEPLOY_ERC1155=1     -> same as '--fresh-erc1155'
+
 After deployment
 ----------------
-- Note the deployed address printed by this script.
-- Update `app/src/config/contracts.ts`:
-    - For Sepolia, set `CONTRACTS_BY_ENV.testnet.proposalContract.address`.
-    - For Mainnet, set `CONTRACTS_BY_ENV.mainnet.proposalContract.address`.
-- Run the ABI sync script if the contract ABI changed:
-
-       python scripts/sync_proposal_abi.py
+- Frontend address for the active env is auto-updated in `app/src/config/contracts.ts`.
+- ABIs are re-synced into `app/src/abis/*.json`.
 """
 
 import os
 import re
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 
 from ape import accounts, networks, project
 
@@ -51,6 +64,8 @@ from ape import accounts, networks, project
 ENV_TOKEN_CONTRACT = "PROPOSAL_TOKEN_CONTRACT"
 ENV_TOKEN_ID = "PROPOSAL_TOKEN_ID"
 ENV_DEPLOYER_ALIAS = "DEPLOYER_ACCOUNT_ALIAS"
+ENV_FORCE = "FORCE_REDEPLOY"
+ENV_FORCE_ERC1155 = "FORCE_DEPLOY_ERC1155"
 
 # Mainnet Bobu ERC1155 defaults
 MAINNET_BOBU_ERC1155 = "0x2079812353E2C9409a788FBF5f383fa62aD85bE8"
@@ -113,6 +128,25 @@ def main():
     """
     Ape entrypoint. Uses the current `--network` selected via Ape CLI.
     """
+    # --------------------------
+    # Parse optional CLI flags
+    # --------------------------
+    argv = [a.lower() for a in sys.argv[1:]]
+    force = ("--force" in argv) or (_get_env(ENV_FORCE) == "1")
+    fresh_erc1155 = ("--fresh-erc1155" in argv) or (_get_env(ENV_FORCE_ERC1155) == "1")
+
+    repo_root = Path(__file__).resolve().parents[1]
+    build_dir = repo_root / ".build"
+
+    # If forcing, wipe build artifacts and recompile to guarantee fresh ABIs
+    if force:
+        print("=== FORCE MODE ENABLED ===")
+        if build_dir.exists():
+            print(f"Removing build folder: {build_dir}")
+            shutil.rmtree(build_dir)
+        print("Running 'ape compile'...")
+        subprocess.run(["ape", "compile"], check=True, cwd=repo_root)
+
     provider = networks.provider
     network = provider.network
 
@@ -156,11 +190,11 @@ def main():
             print(f"No {ENV_TOKEN_ID} set on mainnet; defaulting to MAINNET_BOBU_TOKEN_ID={token_id}")
     else:
         # TESTNET / OTHER: if no ERC1155 is configured, deploy one and point to it.
-        if token_contract_env:
+        if token_contract_env and not fresh_erc1155:
             token_contract = token_contract_env
             print(f"Using {ENV_TOKEN_CONTRACT} override: {token_contract}")
         else:
-            print(f"No {ENV_TOKEN_CONTRACT} set; deploying fresh ERC1155 for this network...")
+            print(f"{'(force) ' if fresh_erc1155 else ''}No usable {ENV_TOKEN_CONTRACT} set; deploying fresh ERC1155 for this network...")
             erc1155 = deployer.deploy(project.ERC1155)
             token_contract = erc1155.address
             print(f"Deployed ERC1155 at: {token_contract}")
@@ -199,9 +233,10 @@ def main():
 
     # Optionally sync ABI into frontend (uses existing script)
     try:
+        # If force wasn't used earlier, still ensure ABIs are current
+        # Always sync ABIs after deployment so frontend matches what was deployed
         from scripts.sync_proposal_abi import main as sync_abi_main
-
-        print("Syncing ProposalContract ABI into frontend...")
+        print("Syncing ABIs into frontend...")
         sync_abi_main()
     except Exception as exc:  # noqa: BLE001
         print(f"[WARN] Failed to sync frontend ABI: {exc!r}")

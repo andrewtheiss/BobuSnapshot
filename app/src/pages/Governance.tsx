@@ -4,7 +4,7 @@ import { useAccount, useConnect, useDisconnect } from 'wagmi'
 import './Governance.css'
 import bobuAvatar from '../assets/bobuthefarmer.webp'
 import { APP_ENV, IS_MAINNET, IS_TESTNET } from '../config/environment'
-import { hasToken, mintDevToken, type Address } from '../web3/proposalContractActions'
+import { hasToken, listProposalsPage, mintDevToken, submitProposal, type Address } from '../web3/proposalContractActions'
 
 type NavItem = {
   id: string
@@ -80,38 +80,21 @@ const NAV_ITEMS: NavItem[] = [
   }
 ]
 
-const MOCK_PROPOSALS: Proposal[] = [
-  {
-    id: '2f5e8447c9561d2e515851c5fba73d234dbf399b1ad5b8d93a6348578e913163',
-    title: 'Decide the next Bobu Committee',
-    author: '0xA4c281209001fd1F354b980D75e28d81FB50C9e2',
-    votes: 151,
-    quorum: 48.4,
-    timeAgo: '3mo ago',
-    hasVoted: true,
-    status: 'closed'
-  },
-  {
-    id: '0dcd52bb91e7d4a2e4562893cd77aba18a97de3a5e69717c7bfb7456a6ce3d16',
-    title: "Approve 'Bobu Merch & Marketing Fund'? (Community Proposal by the Bobu Committee)",
-    author: '0xA4c281209001fd1F354b980D75e28d81FB50C9e2',
-    votes: 89,
-    quorum: 18.8,
-    timeAgo: '7mo ago',
-    hasVoted: false,
-    status: 'closed'
-  },
-  {
-    id: '7d5a25ec53a9c6ceb4a396553a20ed2beccb55c7c6904d8f994ba2e489c72bf1',
-    title: "Approve 'Sake and a Dream'? (Community Proposal by @dgtlemissions)",
-    author: '0xA4c281209001fd1F354b980D75e28d81FB50C9e2',
-    votes: 116,
-    quorum: 24.9,
-    timeAgo: '7mo ago',
-    hasVoted: true,
-    status: 'closed'
-  }
-]
+function formatTimeAgo(tsSeconds: number): string {
+  const now = Date.now() / 1000
+  const diff = Math.max(0, now - tsSeconds)
+  const minutes = Math.floor(diff / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+  const months = Math.floor(days / 30)
+  const years = Math.floor(days / 365)
+  if (years >= 1) return `${years}y ago`
+  if (months >= 1) return `${months}mo ago`
+  if (days >= 1) return `${days}d ago`
+  if (hours >= 1) return `${hours}h ago`
+  if (minutes >= 1) return `${minutes}m ago`
+  return 'just now'
+}
 
 function SnapshotSidebar() {
   return (
@@ -134,7 +117,13 @@ function SnapshotSidebar() {
   )
 }
 
-function SnapshotHeader() {
+function SnapshotHeader({
+  canCreate,
+  onCreate,
+}: {
+  canCreate: boolean
+  onCreate: () => void
+}) {
   const { isConnected, address } = useAccount()
   const { connect, connectors, isPending: isConnecting } = useConnect()
   const { disconnect, isPending: isDisconnecting } = useDisconnect()
@@ -168,6 +157,17 @@ function SnapshotHeader() {
       </form>
 
       <div className="snapshot-header-actions">
+        <button
+          type="button"
+          className="snapshot-header-button"
+          disabled={!canCreate}
+          title={canCreate ? 'Create a new proposal' : 'You need the Bobu token to create proposals'}
+          onClick={() => {
+            if (canCreate) onCreate()
+          }}
+        >
+          <span style={{ marginRight: 6 }}>＋</span> New proposal
+        </button>
         <button
           type="button"
           className="snapshot-header-button"
@@ -387,6 +387,19 @@ function ProposalRow({ id, title, author, votes, quorum, timeAgo, hasVoted, stat
 }
 
 export default function GovernancePage() {
+  const [proposals, setProposals] = useState<Proposal[]>([])
+  const [loadingProposals, setLoadingProposals] = useState<boolean>(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [nextCursor, setNextCursor] = useState<bigint | null>(null)
+  const [loadingNext, setLoadingNext] = useState<boolean>(false)
+  const [showCreate, setShowCreate] = useState<boolean>(false)
+  const [newProposal, setNewProposal] = useState<string>('')
+  const [submitting, setSubmitting] = useState<boolean>(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const { address, isConnected } = useAccount()
+  const [hasAccessToken, setHasAccessToken] = useState<boolean>(false)
+  const [checkingAccess, setCheckingAccess] = useState<boolean>(false)
+
   useEffect(() => {
     document.body.classList.add('governance-light')
     return () => {
@@ -394,24 +407,204 @@ export default function GovernancePage() {
     }
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        if (!isConnected || !address) {
+          setHasAccessToken(false)
+          return
+        }
+        setCheckingAccess(true)
+        const result = await hasToken(address as Address)
+        if (!cancelled) {
+          setHasAccessToken(Boolean(result))
+        }
+      } finally {
+        if (!cancelled) setCheckingAccess(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [address, isConnected])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        setLoadingProposals(true)
+        setLoadError(null)
+        const page = await listProposalsPage({ pageSizeBlocks: 10 })
+        if (cancelled) return
+        const mapped: Proposal[] = page.items.map((l) => ({
+          id: l.id,
+          title: l.proposal || '(empty)',
+          author: l.author,
+          votes: 0,
+          quorum: 0,
+          timeAgo: formatTimeAgo(l.timestamp),
+          hasVoted: false,
+          status: 'active',
+        }))
+        setProposals(mapped)
+        setNextCursor(page.prevCursor)
+      } catch (err) {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : String(err)
+          setLoadError(message)
+        }
+      } finally {
+        if (!cancelled) setLoadingProposals(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleSubmitProposal = async () => {
+    if (!isConnected || !address) {
+      setSubmitError('Connect your wallet first.')
+      return
+    }
+    if (!hasAccessToken) {
+      setSubmitError('You need the Bobu token to create a proposal.')
+      return
+    }
+    const text = newProposal.trim()
+    if (!text) {
+      setSubmitError('Proposal text cannot be empty.')
+      return
+    }
+    try {
+      setSubmitting(true)
+      setSubmitError(null)
+      await submitProposal(text)
+      setShowCreate(false)
+      setNewProposal('')
+      // Optionally refresh current page
+      const page = await listProposalsPage({ pageSizeBlocks: 10 })
+      const mapped: Proposal[] = page.items.map((l) => ({
+        id: l.id,
+        title: l.proposal || '(empty)',
+        author: l.author,
+        votes: 0,
+        quorum: 0,
+        timeAgo: formatTimeAgo(l.timestamp),
+        hasVoted: false,
+        status: 'active',
+      }))
+      setProposals(mapped)
+      setNextCursor(page.prevCursor)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setSubmitError(message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const loadOlder = async () => {
+    if (loadingNext || nextCursor === null) return
+    try {
+      setLoadingNext(true)
+      const page = await listProposalsPage({ endBlock: nextCursor, pageSizeBlocks: 10 })
+      const mapped: Proposal[] = page.items.map((l) => ({
+        id: l.id,
+        title: l.proposal || '(empty)',
+        author: l.author,
+        votes: 0,
+        quorum: 0,
+        timeAgo: formatTimeAgo(l.timestamp),
+        hasVoted: false,
+        status: 'active',
+      }))
+      // append, dedupe by id
+      const seen = new Set(proposals.map((p) => p.id))
+      const merged = proposals.concat(mapped.filter((m) => !seen.has(m.id)))
+      setProposals(merged)
+      setNextCursor(page.prevCursor)
+    } finally {
+      setLoadingNext(false)
+    }
+  }
+
   return (
     <div className="governance-root">
       <div className="snapshot-layout">
         <SnapshotSidebar />
         <div className="snapshot-main">
-          <SnapshotHeader />
+          <SnapshotHeader
+            canCreate={isConnected && hasAccessToken && !checkingAccess}
+            onCreate={() => setShowCreate(true)}
+          />
           <div className="snapshot-content">
+            {showCreate && (
+              <section className="snapshot-section">
+                <header className="snapshot-section-heading">Create proposal</header>
+                <div className="proposal-row" style={{ display: 'block' }}>
+                  <label style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>Details</label>
+                  <textarea
+                    value={newProposal}
+                    onChange={(e) => setNewProposal(e.target.value)}
+                    rows={6}
+                    placeholder="Describe your proposal…"
+                    style={{ width: '100%', padding: 8, font: 'inherit' }}
+                  />
+                  <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      className="snapshot-header-button"
+                      onClick={handleSubmitProposal}
+                      disabled={submitting || !isConnected || !hasAccessToken}
+                    >
+                      {submitting ? 'Submitting…' : 'Submit proposal'}
+                    </button>
+                    <button
+                      type="button"
+                      className="snapshot-header-button snapshot-header-button-icon"
+                      onClick={() => {
+                        setShowCreate(false)
+                        setSubmitError(null)
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    {submitError && <span style={{ color: 'crimson' }}>{submitError}</span>}
+                    {!isConnected && <span>Connect a wallet to continue.</span>}
+                    {isConnected && checkingAccess && <span>Checking token access…</span>}
+                    {isConnected && !checkingAccess && !hasAccessToken && (
+                      <span>You need the Bobu token to submit.</span>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
             <SpaceHero />
             <SpaceSummary />
             <section className="snapshot-section">
               <header className="snapshot-section-heading">Proposals</header>
               <div className="proposal-list">
-                {MOCK_PROPOSALS.map((proposal) => (
-                  <ProposalRow key={proposal.id} {...proposal} />
-                ))}
+                {loadingProposals && <div className="proposal-row">Loading proposals…</div>}
+                {loadError && <div className="proposal-row">Failed to load: {loadError}</div>}
+                {!loadingProposals && !loadError && proposals.length === 0 && (
+                  <div className="proposal-row">No proposals yet.</div>
+                )}
+                {!loadingProposals &&
+                  !loadError &&
+                  proposals.map((proposal) => <ProposalRow key={proposal.id} {...proposal} />)}
               </div>
-              <a href="#/proposals" className="proposal-see-more">
-                See more
+              <a
+                href="#"
+                className="proposal-see-more"
+                onClick={(e) => {
+                  e.preventDefault()
+                  loadOlder()
+                }}
+                aria-disabled={nextCursor === null || loadingNext}
+              >
+                {loadingNext ? 'Loading…' : nextCursor === null ? 'No more' : 'Load older'}
               </a>
             </section>
           </div>

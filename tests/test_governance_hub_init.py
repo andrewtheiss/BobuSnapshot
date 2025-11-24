@@ -512,3 +512,61 @@ def test_get_top_active_proposal_leaderboard(governance_hub, accounts, project, 
     top = hub.getTopActiveProposal()
     assert top == p2
 
+
+def test_metrics_counts_and_unique_users(governance_hub, accounts, chain, project):
+    hub, bobu, deployer, _, _ = governance_hub
+    a, b, c, d = accounts[2], accounts[3], accounts[4], accounts[5]
+
+    # Initial metrics
+    assert hub.totalProposals() == 0
+    assert hub.totalComments() == 0
+    assert hub.uniqueUsers() == 0
+
+    # Create proposals: two by the same user (a), one by a different user (b)
+    hub.createProposal("P1", "Body1", 0, 0, sender=a)
+    assert hub.totalProposals() == 1
+    assert hub.uniqueUsers() == 1
+
+    hub.createProposal("P2", "Body2", 0, 0, sender=a)
+    assert hub.totalProposals() == 2
+    # Unique users should not increase for same address
+    assert hub.uniqueUsers() == 1
+
+    hub.createProposal("P3", "Body3", 0, 0, sender=b)
+    # Get newest draft as P3 (avoid relying on return_value)
+    p3 = hub.getProposals(0, 0, 1, True)[0]
+    assert p3 is not None
+    assert hub.totalProposals() == 3
+    assert hub.uniqueUsers() == 2
+
+    # Move P3 to OPEN to allow commenting
+    hub.adminMoveState(p3, 1, sender=bobu)  # STATE_OPEN
+
+    # Add comments by a new user (c) and an existing user (a)
+    hub.addComment(p3, "c's comment", sender=c)
+    assert hub.totalComments() == 1
+    assert hub.uniqueUsers() == 3
+
+    hub.addComment(p3, "a's comment", sender=a)
+    assert hub.totalComments() == 2
+    # Unique users unchanged (a already counted)
+    assert hub.uniqueUsers() == 3
+
+    # Create a proposal with an ACTIVE voting window now
+    now = chain.pending_timestamp
+    hub.createProposal("VoteNow", "BodyV", now, now + 1000, sender=a)
+    # Newest active should be the vote-now proposal
+    pv = hub.getProposals(2, 0, 1, True)[0]
+    assert pv is not None
+
+    # Cast vote by a new user (d)
+    hub.castVote(pv, True, sender=d)
+    assert hub.uniqueUsers() == 4
+
+    # Admin delete comment should NOT change totalComments (we count cumulative created)
+    # Deploy a separate comment instance to satisfy interface and run delete
+    comment = deployer.deploy(project.CommentTemplate)
+    comment.initialize(hub.address, p3, c.address, "to delete", now + 1, sender=deployer)
+    hub.adminDeleteComment(p3, comment.address, sender=bobu)
+    assert hub.totalComments() == 2
+

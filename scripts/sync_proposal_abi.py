@@ -19,6 +19,15 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # Frontend ABI file (this is what wagmi/viem imports)
 FRONTEND_ABI = REPO_ROOT / "app" / "src" / "abis" / "ProposalContract.json"
 
+# Additional ABIs to sync if present in Ape manifest
+CONTRACTS_TO_SYNC = {
+  "ProposalContract": REPO_ROOT / "app" / "src" / "abis" / "ProposalContract.json",
+  "ERC1155": REPO_ROOT / "app" / "src" / "abis" / "ERC1155.json",
+  "GovernanceHub": REPO_ROOT / "app" / "src" / "abis" / "GovernanceHub.json",
+  "ProposalTemplate": REPO_ROOT / "app" / "src" / "abis" / "ProposalTemplate.json",
+  "CommentTemplate": REPO_ROOT / "app" / "src" / "abis" / "CommentTemplate.json",
+}
+
 
 def _find_ape_artifact() -> Path:
   """
@@ -38,6 +47,36 @@ def _find_ape_artifact() -> Path:
 
   print(f"Using Ape manifest at: {manifest}")
   return manifest
+
+
+def _load_contract_types(path: Path):
+  data = json.loads(path.read_text())
+  return data.get("contractTypes") or {}
+
+
+def _sync_one(name: str, abi, out_path: Path) -> bool:
+  """
+  Write ABI to out_path if changed.
+  Returns True if file was updated.
+  """
+  new_hash = abi_hash(abi)
+  if out_path.exists():
+    try:
+      current = json.loads(out_path.read_text())
+      old_hash = abi_hash(current)
+    except Exception:
+      old_hash = "(invalid)"
+  else:
+    old_hash = "(none)"
+
+  if old_hash == new_hash:
+    print(f"[OK] {name}: no changes (hash={new_hash})")
+    return False
+
+  out_path.parent.mkdir(parents=True, exist_ok=True)
+  out_path.write_text(json.dumps(abi, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+  print(f"[UPDATED] {name} ABI -> {out_path} (old={old_hash}, new={new_hash})")
+  return True
 
 
 def load_abi_from_artifact(path: Path):
@@ -61,30 +100,24 @@ def abi_hash(abi) -> str:
 
 
 def main():
-  ape_artifact = _find_ape_artifact()
+  manifest = _find_ape_artifact()
+  contract_types = _load_contract_types(manifest)
 
-  source_abi = load_abi_from_artifact(ape_artifact)
-  source_hash = abi_hash(source_abi)
+  any_updates = False
+  for name, out_path in CONTRACTS_TO_SYNC.items():
+    entry = contract_types.get(name)
+    if not entry:
+      print(f"[SKIP] {name}: not found in Ape manifest.")
+      continue
+    abi = entry.get("abi")
+    if not abi:
+      print(f"[WARN] {name}: found but missing 'abi' field. Skipping.")
+      continue
+    updated = _sync_one(name, abi, out_path)
+    any_updates = any_updates or updated
 
-  if FRONTEND_ABI.exists():
-    current_abi = json.loads(FRONTEND_ABI.read_text())
-    current_hash = abi_hash(current_abi)
-  else:
-    current_abi = None
-    current_hash = None
-
-  print(f"Source ABI hash:   {source_hash}")
-  print(f"Frontend ABI hash: {current_hash or '(none)'}")
-
-  if current_hash == source_hash:
-    print("ABIs match. No update needed.")
-    return
-
-  FRONTEND_ABI.write_text(
-    json.dumps(source_abi, indent=2, sort_keys=True) + "\n",
-    encoding="utf-8",
-  )
-  print(f"Frontend ABI updated at {FRONTEND_ABI}")
+  if not any_updates:
+    print("All ABIs are up-to-date.")
 
 
 if __name__ == "__main__":

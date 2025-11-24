@@ -120,6 +120,13 @@ closedProposals: DynArray[address, MAX_PROPOSALS]
 stateByProposalPlusOne: HashMap[address, uint256]
 indexByProposalPlusOne: HashMap[address, uint256]
 
+# --------------------------
+# Metrics
+# --------------------------
+totalProposals: public(uint256)
+totalComments: public(uint256)
+uniqueUsers: public(uint256)
+_seenUser: HashMap[address, bool]
 @deploy
 def __init__(
     _bobuMultisig: address,
@@ -254,6 +261,11 @@ def _requireVoter(user: address):
         assert self._hasToken(user), "token required to vote"
 
 @internal
+def _touchUser(u: address):
+    if not self._seenUser[u]:
+        self._seenUser[u] = True
+        self.uniqueUsers += 1
+@internal
 def _appendToState(p: address, st: uint256):
     assert self.stateByProposalPlusOne[p] == 0, "already indexed"
     if st == STATE_DRAFT:
@@ -328,6 +340,8 @@ def createProposal(_title: String[128], _body: String[4096], _voteStart: uint256
     # Require either both zero (no voting) or a valid window end > start
     assert (_voteStart == 0 and _voteEnd == 0) or (_voteEnd > _voteStart), "invalid window"
 
+    self._touchUser(msg.sender)
+
     p: address = create_minimal_proxy_to(self.proposalTemplate, revert_on_failure=True)
     extcall IProposalTemplate(p).initialize(self, _title, msg.sender, _body, block.timestamp, _voteStart, _voteEnd)
 
@@ -341,6 +355,7 @@ def createProposal(_title: String[128], _body: String[4096], _voteStart: uint256
             target_state = STATE_CLOSED
 
     self._appendToState(p, target_state)
+    self.totalProposals += 1
     log ProposalCreated(p, msg.sender, _title)
     return p
 
@@ -352,9 +367,12 @@ def addComment(_proposal: address, _content: String[1024]) -> address:
     st: uint256 = st_plus_one - 1
     assert st == STATE_OPEN or st == STATE_ACTIVE, "not commentable"
 
+    self._touchUser(msg.sender)
+
     c: address = create_minimal_proxy_to(self.commentTemplate, revert_on_failure=True)
     extcall ICommentTemplate(c).initialize(self, _proposal, msg.sender, _content, block.timestamp)
     extcall IProposalTemplate(_proposal).addCommentAddress(c)
+    self.totalComments += 1
     log CommentAdded(_proposal, c, msg.sender)
     return c
 
@@ -365,6 +383,7 @@ def castVote(_proposal: address, support: bool):
     ve: uint256 = staticcall IProposalTemplate(_proposal).voteEnd()
     assert vs > 0 and ve > 0, "no voting window"
     assert block.timestamp >= vs and block.timestamp <= ve, "not in window"
+    self._touchUser(msg.sender)
     # 1 address = 1 vote (weight=1). If token-weighted is desired, wire in balance here.
     extcall IProposalTemplate(_proposal).hubCastVote(msg.sender, support, 1)
 
