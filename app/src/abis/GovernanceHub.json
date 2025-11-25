@@ -380,6 +380,10 @@
       {
         "name": "_content",
         "type": "string"
+      },
+      {
+        "name": "_sentiment",
+        "type": "uint256"
       }
     ],
     "name": "addComment",
@@ -436,6 +440,26 @@
       }
     ],
     "name": "setActiveByCreatorOrAdmin",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "name": "_proposal",
+        "type": "address"
+      },
+      {
+        "name": "_voteStart",
+        "type": "uint256"
+      },
+      {
+        "name": "_voteEnd",
+        "type": "uint256"
+      }
+    ],
+    "name": "setVotingWindow",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

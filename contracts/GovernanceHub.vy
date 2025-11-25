@@ -26,6 +26,7 @@ interface IProposalTemplate:
     def author() -> address: view
     def votesFor() -> uint256: view
     def votesAgainst() -> uint256: view
+    def hubSetVotingWindow(_voteStart: uint256, _voteEnd: uint256): nonpayable
 
 interface ICommentTemplate:
     def initialize(
@@ -33,7 +34,8 @@ interface ICommentTemplate:
         _proposal: address,
         _author: address,
         _content: String[1024],
-        _createdAt: uint256
+        _createdAt: uint256,
+        _sentiment: uint256
     ): nonpayable
     def createdAt() -> uint256: view
     def proposal() -> address: view
@@ -155,8 +157,8 @@ def __init__(
     self.gateComments = False
     self.gateVotes = False
 
-    log AdminsReset(self.bobuMultisig, self.creator, _elected1, _elected2, _elected3)
-    log TemplatesUpdated(_proposalTemplate, _commentTemplate, msg.sender)
+    log AdminsReset(bobuMultisig=self.bobuMultisig, creator=self.creator, elected1=_elected1, elected2=_elected2, elected3=_elected3)
+    log TemplatesUpdated(proposalTemplate=_proposalTemplate, commentTemplate=_commentTemplate, by=msg.sender)
 
 @internal
 @view
@@ -185,7 +187,7 @@ def resetAllAdmins(_newCreator: address, _e1: address, _e2: address, _e3: addres
     self.electedAdmins[0] = _e1
     self.electedAdmins[1] = _e2
     self.electedAdmins[2] = _e3
-    log AdminsReset(self.bobuMultisig, _newCreator, _e1, _e2, _e3)
+    log AdminsReset(bobuMultisig=self.bobuMultisig, creator=_newCreator, elected1=_e1, elected2=_e2, elected3=_e3)
 
 @external
 def setBobuMultisig(_newBobu: address):
@@ -193,7 +195,7 @@ def setBobuMultisig(_newBobu: address):
     assert _newBobu != empty(address), "bobu empty"
     old: address = self.bobuMultisig
     self.bobuMultisig = _newBobu
-    log BobuChanged(old, _newBobu)
+    log BobuChanged(oldBobu=old, newBobu=_newBobu)
 
 @external
 def setElectedAdmins(_e1: address, _e2: address, _e3: address):
@@ -201,7 +203,7 @@ def setElectedAdmins(_e1: address, _e2: address, _e3: address):
     self.electedAdmins[0] = _e1
     self.electedAdmins[1] = _e2
     self.electedAdmins[2] = _e3
-    log AdminsReset(self.bobuMultisig, self.creator, _e1, _e2, _e3)
+    log AdminsReset(bobuMultisig=self.bobuMultisig, creator=self.creator, elected1=_e1, elected2=_e2, elected3=_e3)
 
 @external
 def setTemplates(_proposalTemplate: address, _commentTemplate: address):
@@ -210,7 +212,7 @@ def setTemplates(_proposalTemplate: address, _commentTemplate: address):
     assert _commentTemplate != empty(address)
     self.proposalTemplate = _proposalTemplate
     self.commentTemplate = _commentTemplate
-    log TemplatesUpdated(_proposalTemplate, _commentTemplate, msg.sender)
+    log TemplatesUpdated(proposalTemplate=_proposalTemplate, commentTemplate=_commentTemplate, by=msg.sender)
 
 @external
 def setTokenRequirement(_token: address, _tokenId: uint256):
@@ -224,7 +226,7 @@ def setGating(_gateProposals: bool, _gateComments: bool, _gateVotes: bool):
     self.gateProposals = _gateProposals
     self.gateComments = _gateComments
     self.gateVotes = _gateVotes
-    log TokenGateUpdated(self.tokenContract1155, self.tokenId1155, _gateProposals, _gateComments, _gateVotes, msg.sender)
+    log TokenGateUpdated(tokenContract1155=self.tokenContract1155, tokenId1155=self.tokenId1155, gateProposals=_gateProposals, gateComments=_gateComments, gateVotes=_gateVotes, by=msg.sender)
 
 @external
 @view
@@ -356,24 +358,25 @@ def createProposal(_title: String[128], _body: String[4096], _voteStart: uint256
 
     self._appendToState(p, target_state)
     self.totalProposals += 1
-    log ProposalCreated(p, msg.sender, _title)
+    log ProposalCreated(proposal=p, author=msg.sender, title=_title)
     return p
 
 @external
-def addComment(_proposal: address, _content: String[1024]) -> address:
+def addComment(_proposal: address, _content: String[1024], _sentiment: uint256) -> address:
     self._requireCommenter(msg.sender)
     st_plus_one: uint256 = self.stateByProposalPlusOne[_proposal]
     assert st_plus_one > 0, "unknown proposal"
     st: uint256 = st_plus_one - 1
-    assert st == STATE_OPEN or st == STATE_ACTIVE, "not commentable"
+    # Allow comments on all non-closed proposals (including DRAFT)
+    assert st != STATE_CLOSED, "not commentable"
 
     self._touchUser(msg.sender)
 
     c: address = create_minimal_proxy_to(self.commentTemplate, revert_on_failure=True)
-    extcall ICommentTemplate(c).initialize(self, _proposal, msg.sender, _content, block.timestamp)
+    extcall ICommentTemplate(c).initialize(self, _proposal, msg.sender, _content, block.timestamp, _sentiment)
     extcall IProposalTemplate(_proposal).addCommentAddress(c)
     self.totalComments += 1
-    log CommentAdded(_proposal, c, msg.sender)
+    log CommentAdded(proposal=_proposal, comment=c, author=msg.sender)
     return c
 
 @external
@@ -397,7 +400,7 @@ def adminMoveState(_proposal: address, _newState: uint256):
     if old_st == _newState:
         return
     self._moveState(_proposal, _newState)
-    log StateChanged(_proposal, old_st, _newState, msg.sender)
+    log StateChanged(proposal=_proposal, oldState=old_st, newState=_newState, by=msg.sender)
 
 
 @external
@@ -421,7 +424,48 @@ def setActiveByCreatorOrAdmin(_proposal: address, _active: bool):
         return
 
     self._moveState(_proposal, new_st)
-    log StateChanged(_proposal, old_st, new_st, msg.sender)
+    log StateChanged(proposal=_proposal, oldState=old_st, newState=new_st, by=msg.sender)
+
+@external
+def setVotingWindow(_proposal: address, _voteStart: uint256, _voteEnd: uint256):
+    """
+    Allow proposal author or any admin to set the voting window (start/end).
+    Rules:
+      - Either both zero (no voting) OR end > start.
+      - After setting, the proposal's indexed state is synchronized.
+    """
+    # Verify proposal is known
+    old_plus_one: uint256 = self.stateByProposalPlusOne[_proposal]
+    assert old_plus_one > 0, "unknown proposal"
+    old_st: uint256 = old_plus_one - 1
+
+    # Check caller permissions: author OR admin
+    author: address = staticcall IProposalTemplate(_proposal).author()
+    if msg.sender != author:
+        self._onlyAdminOrBobu()
+
+    # Validate window
+    assert (_voteStart == 0 and _voteEnd == 0) or (_voteEnd > _voteStart), "invalid window"
+
+    # Apply on the child template (hub-only function)
+    extcall IProposalTemplate(_proposal).hubSetVotingWindow(_voteStart, _voteEnd)
+
+    # Sync state to reflect new window immediately (inline to avoid external self-call)
+    vs_local: uint256 = _voteStart
+    ve_local: uint256 = _voteEnd
+    new_st: uint256 = old_st
+    if ve_local > 0 and block.timestamp > ve_local:
+        new_st = STATE_CLOSED
+    elif vs_local > 0 and block.timestamp >= vs_local and block.timestamp <= ve_local:
+        new_st = STATE_ACTIVE
+    elif vs_local > 0 and block.timestamp < vs_local:
+        new_st = STATE_OPEN
+    else:
+        new_st = STATE_DRAFT
+
+    if new_st != old_st:
+        self._moveState(_proposal, new_st)
+        log StateChanged(proposal=_proposal, oldState=old_st, newState=new_st, by=msg.sender)
 
 @external
 def syncProposalState(_proposal: address):
@@ -444,7 +488,7 @@ def syncProposalState(_proposal: address):
 
     if new_st != old_st:
         self._moveState(_proposal, new_st)
-        log StateChanged(_proposal, old_st, new_st, msg.sender)
+        log StateChanged(proposal=_proposal, oldState=old_st, newState=new_st, by=msg.sender)
 
 @external
 def adminDeleteComment(_proposal: address, _comment: address):
@@ -453,7 +497,7 @@ def adminDeleteComment(_proposal: address, _comment: address):
     created: uint256 = staticcall ICommentTemplate(_comment).createdAt()
     assert block.timestamp <= created + COMMENT_DELETE_WINDOW, "window passed"
     extcall ICommentTemplate(_comment).markDeleted()
-    log CommentDeleted(_proposal, _comment, msg.sender)
+    log CommentDeleted(proposal=_proposal, comment=_comment, byAdmin=msg.sender)
 
 @internal
 @view

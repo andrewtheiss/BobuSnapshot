@@ -209,7 +209,7 @@ def test_add_comment_on_open_and_active_proposals(governance_hub, erc1155_token,
     before_comments = proposal_instance.getComments(0, 100, False)
 
     # Add a comment in OPEN state
-    comment_tx = hub.addComment(proposal, "First comment", sender=commenter)
+    comment_tx = hub.addComment(proposal, "First comment", 3, sender=commenter)
     comment_addr = comment_tx.return_value
     assert comment_addr != ZERO_ADDRESS
 
@@ -219,7 +219,7 @@ def test_add_comment_on_open_and_active_proposals(governance_hub, erc1155_token,
 
     # Move proposal to ACTIVE and ensure commenting still allowed
     hub.adminMoveState(proposal, 2, sender=bobu)  # STATE_ACTIVE
-    comment_tx2 = hub.addComment(proposal, "Second comment", sender=commenter)
+    comment_tx2 = hub.addComment(proposal, "Second comment", 1, sender=commenter)
     comment_addr2 = comment_tx2.return_value
     assert comment_addr2 != ZERO_ADDRESS
 
@@ -261,19 +261,19 @@ def test_add_comment_invalid_states_and_unknown_proposal(governance_hub, account
     assert len(drafts) > 0
     proposal = drafts[-1]
 
-    # Cannot comment in DRAFT
-    with pytest.raises(Exception):
-        hub.addComment(proposal, "Should fail in draft", sender=commenter)
+    # Now allowed: Can comment in DRAFT
+    tx = hub.addComment(proposal, "Should work in draft", 3, sender=commenter)
+    assert tx.return_value is not None
 
     # Move to CLOSED and cannot comment there either
     hub.adminMoveState(proposal, 3, sender=bobu)  # STATE_CLOSED
     with pytest.raises(Exception):
-        hub.addComment(proposal, "Should fail in closed", sender=commenter)
+        hub.addComment(proposal, "Should fail in closed", 2, sender=commenter)
 
     # Unknown proposal address should also fail
     fake_proposal = "0x0000000000000000000000000000000000000010"
     with pytest.raises(Exception):
-        hub.addComment(fake_proposal, "Unknown proposal", sender=commenter)
+        hub.addComment(fake_proposal, "Unknown proposal", 4, sender=commenter)
 
 
 def test_add_comment_requires_token_when_gate_comments_true(governance_hub, erc1155_token, accounts):
@@ -300,10 +300,10 @@ def test_add_comment_requires_token_when_gate_comments_true(governance_hub, erc1
 
     # User without token cannot comment
     with pytest.raises(Exception):
-        hub.addComment(proposal, "No token commenter", sender=commenter_without)
+        hub.addComment(proposal, "No token commenter", 2, sender=commenter_without)
 
     # User with token can comment
-    tx = hub.addComment(proposal, "Has token commenter", sender=commenter_with)
+    tx = hub.addComment(proposal, "Has token commenter", 1, sender=commenter_with)
     comment_addr = tx.return_value
     assert comment_addr != ZERO_ADDRESS
 

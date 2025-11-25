@@ -59,6 +59,7 @@ export default function QuillEditor({ html, onChangeHtml, readOnly }: Props) {
           <select className="ql-header" defaultValue="">
             <option value="1" />
             <option value="2" />
+            <option value="3" />
             <option value="" />
           </select>
         </span>
@@ -66,13 +67,24 @@ export default function QuillEditor({ html, onChangeHtml, readOnly }: Props) {
           <button className="ql-bold" />
           <button className="ql-italic" />
           <button className="ql-underline" />
+          <button className="ql-strike" />
+          <button className="ql-underline" />
           <button className="ql-link" />
         </span>
         <span className="ql-formats">
           <button className="ql-list" value="ordered" />
           <button className="ql-list" value="bullet" />
+          <button className="ql-list" value="check" />
           <button className="ql-blockquote" />
           <button className="ql-code-block" />
+        </span>
+        <span className="ql-formats">
+          <select className="ql-align" />
+          <select className="ql-color" />
+          <select className="ql-background" />
+        </span>
+        <span className="ql-formats">
+          <button className="ql-clean" />
         </span>
       </div>
       <div ref={editorRef} />

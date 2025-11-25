@@ -3,7 +3,8 @@ import { useAccount } from 'wagmi'
 import QuillEditor from '../components/QuillEditor'
 import { composeProposalMarkdown } from '../utils/proposalMarkdown'
 import { htmlToMarkdown } from '../utils/proposalMarkdown'
-import { submitProposal } from '../web3/proposalContractActions'
+import { createProposalOnHub } from '../web3/governanceHubActions'
+import bobuAvatar from '../assets/bobuthefarmer.webp'
 
 export default function NewProposal() {
   const [title, setTitle] = useState('')
@@ -41,12 +42,20 @@ export default function NewProposal() {
       setError(null)
       const bodyMarkdown = htmlToMarkdown(trimmedBodyHtml)
       const fullMarkdown = composeProposalMarkdown(trimmedTitle, address, bodyMarkdown)
-      await submitProposal(fullMarkdown)
+      // Create as DRAFT by default (0,0); you can schedule on the main page
+      await createProposalOnHub(trimmedTitle, fullMarkdown, 0, 0)
       // Success: redirect back to governance
       window.location.hash = '#/s:bobu.eth'
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      setError(message)
+      const lower = message.toLowerCase()
+      if (lower.includes('denied') || lower.includes('rejected')) {
+        setError('Transaction cancelled by user.')
+      } else if (lower.includes('insufficient funds')) {
+        setError('Insufficient funds to pay gas. Please top up and try again.')
+      } else {
+        setError(`Submission failed: ${message.split('\n')[0].slice(0, 160)}`)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -81,7 +90,7 @@ export default function NewProposal() {
         <div className="snapshot-main">
           <header className="snapshot-header">
             <div className="snapshot-header-space">
-              <img src="/assets/bobuthefarmer.webp" alt="Bobu avatar" className="snapshot-header-avatar" />
+              <img src={bobuAvatar} alt="Bobu avatar" className="snapshot-header-avatar" />
               <span className="snapshot-header-name">Bobu</span>
             </div>
             <div className="snapshot-header-actions"></div>

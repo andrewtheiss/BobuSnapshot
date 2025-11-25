@@ -53,6 +53,15 @@ def initialize(
     self.voteEnd = _voteEnd
 
 @external
+def hubSetVotingWindow(_voteStart: uint256, _voteEnd: uint256):
+    """
+    Update the voting window. Callable only by the owning GovernanceHub.
+    """
+    assert msg.sender == self.ownerHub, "hub only"
+    self.voteStart = _voteStart
+    self.voteEnd = _voteEnd
+
+@external
 def addCommentAddress(_comment: address):
     assert msg.sender == self.ownerHub, "hub only"
     self.comments.append(_comment)
@@ -67,7 +76,7 @@ def hubCastVote(_voter: address, support: bool, weight: uint256):
         self.votesFor += weight
     else:
         self.votesAgainst += weight
-    log Voted(_voter, support, weight)
+    log Voted(voter=_voter, support=support, weight=weight)
 
 PAGE_LIMIT: constant(uint256) = 100
 

@@ -4,7 +4,15 @@ import { useAccount, useConnect, useDisconnect } from 'wagmi'
 import './Governance.css'
 import bobuAvatar from '../assets/bobuthefarmer.webp'
 import { APP_ENV, IS_MAINNET, IS_TESTNET } from '../config/environment'
-import { hasToken, listProposalsPage, mintDevToken, submitProposal, type Address } from '../web3/proposalContractActions'
+import { hasToken, mintDevToken, submitProposal, type Address } from '../web3/proposalContractActions'
+import {
+  getProposalCountByState,
+  getProposalsByState,
+  readProposalDetails,
+  readProposalBody,
+  HubProposalState,
+} from '../web3/governanceHubActions'
+import { parseProposalMarkdown } from '../utils/proposalMarkdown'
 
 type NavItem = {
   id: string
@@ -22,7 +30,8 @@ type Proposal = {
   quorum: number
   timeAgo: string
   hasVoted: boolean
-  status: 'active' | 'closed'
+  status: 'draft' | 'open' | 'active' | 'closed'
+  snippet?: string
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -349,7 +358,18 @@ function DevFooter() {
   )
 }
 
-function ProposalRow({ id, title, author, votes, quorum, timeAgo, hasVoted, status }: Proposal) {
+function ProposalRow({
+  id,
+  title,
+  author,
+  votes,
+  quorum,
+  timeAgo,
+  hasVoted,
+  status,
+  snippet,
+  onScheduleClick,
+}: Proposal & { onScheduleClick?: (id: string) => void }) {
   const shortAuthor = `${author.slice(0, 6)}...${author.slice(-4)}`
 
   return (
@@ -359,6 +379,7 @@ function ProposalRow({ id, title, author, votes, quorum, timeAgo, hasVoted, stat
         <a href={`#/proposal/${id}`} className="proposal-row-title">
           {title}
         </a>
+        {snippet && <p className="proposal-row-snippet">{snippet}</p>}
         <div className="proposal-row-meta">
           <span>#{id.slice(0, 5)}</span>
           <span className="proposal-row-dot">·</span>
@@ -380,6 +401,19 @@ function ProposalRow({ id, title, author, votes, quorum, timeAgo, hasVoted, stat
               <span className="proposal-row-voted">You voted</span>
             </>
           )}
+          {onScheduleClick && (
+            <>
+              <span className="proposal-row-dot">·</span>
+              <button
+                type="button"
+                className="snapshot-header-button"
+                onClick={() => onScheduleClick(id)}
+                title="Set or update voting window"
+              >
+                Schedule
+              </button>
+            </>
+          )}
         </div>
       </div>
     </article>
@@ -390,8 +424,17 @@ export default function GovernancePage() {
   const [proposals, setProposals] = useState<Proposal[]>([])
   const [loadingProposals, setLoadingProposals] = useState<boolean>(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [nextCursor, setNextCursor] = useState<bigint | null>(null)
-  const [loadingNext, setLoadingNext] = useState<boolean>(false)
+  const [currentPage, setCurrentPage] = useState<number>(1)
+  const PAGE_SIZE = 10
+  const [countsByState, setCountsByState] = useState<Record<number, number>>({
+    [HubProposalState.DRAFT]: 0,
+    [HubProposalState.OPEN]: 0,
+    [HubProposalState.ACTIVE]: 0,
+    [HubProposalState.CLOSED]: 0,
+  })
+  const [selectedStates, setSelectedStates] = useState<Set<number>>(
+    () => new Set<number>([HubProposalState.ACTIVE, HubProposalState.DRAFT])
+  )
   const [showCreate, setShowCreate] = useState<boolean>(false)
   const [newProposal, setNewProposal] = useState<string>('')
   const [submitting, setSubmitting] = useState<boolean>(false)
@@ -399,6 +442,11 @@ export default function GovernancePage() {
   const { address, isConnected } = useAccount()
   const [hasAccessToken, setHasAccessToken] = useState<boolean>(false)
   const [checkingAccess, setCheckingAccess] = useState<boolean>(false)
+  const [scheduleForId, setScheduleForId] = useState<string | null>(null)
+  const [scheduleStart, setScheduleStart] = useState<string>('') // datetime-local value
+  const [scheduleEnd, setScheduleEnd] = useState<string>('') // datetime-local value
+  const [scheduleSubmitting, setScheduleSubmitting] = useState<boolean>(false)
+  const [scheduleError, setScheduleError] = useState<string | null>(null)
 
   useEffect(() => {
     document.body.classList.add('governance-light')
@@ -429,39 +477,171 @@ export default function GovernancePage() {
     }
   }, [address, isConnected])
 
+  // Map GovernanceHub state to UI status
+  const stateToStatus = (st: HubProposalState): Proposal['status'] => {
+    if (st === HubProposalState.ACTIVE) return 'active'
+    if (st === HubProposalState.OPEN) return 'open'
+    if (st === HubProposalState.DRAFT) return 'draft'
+    return 'closed'
+  }
+
+  const STATE_ORDER: HubProposalState[] = [
+    HubProposalState.ACTIVE,
+    HubProposalState.OPEN,
+    HubProposalState.DRAFT,
+    HubProposalState.CLOSED,
+  ]
+
+  const selectedStatesOrdered = STATE_ORDER.filter((s) => selectedStates.has(s))
+
+  const totalSelectedCount = selectedStatesOrdered.reduce(
+    (acc, s) => acc + (countsByState[s] ?? 0),
+    0
+  )
+  const totalPages = Math.max(1, Math.ceil(totalSelectedCount / PAGE_SIZE))
+
+  const refreshCounts = async () => {
+    const [draft, open, active, closed] = await Promise.all([
+      getProposalCountByState(HubProposalState.DRAFT),
+      getProposalCountByState(HubProposalState.OPEN),
+      getProposalCountByState(HubProposalState.ACTIVE),
+      getProposalCountByState(HubProposalState.CLOSED),
+    ])
+    setCountsByState({
+      [HubProposalState.DRAFT]: draft,
+      [HubProposalState.OPEN]: open,
+      [HubProposalState.ACTIVE]: active,
+      [HubProposalState.CLOSED]: closed,
+    })
+  }
+
+  const loadPage = async (pageNum: number) => {
+        setLoadingProposals(true)
+        setLoadError(null)
+    try {
+      const startIndex = (pageNum - 1) * PAGE_SIZE
+      const endIndexExclusive = Math.min(totalSelectedCount, startIndex + PAGE_SIZE)
+
+      const segments: Array<{
+        state: HubProposalState
+        localOffset: number
+        count: number
+      }> = []
+
+      let cumulative = 0
+      for (const st of selectedStatesOrdered) {
+        const cnt = countsByState[st] ?? 0
+        const segStart = cumulative
+        const segEnd = cumulative + cnt
+        cumulative += cnt
+        const overlapStart = Math.max(startIndex, segStart)
+        const overlapEnd = Math.min(endIndexExclusive, segEnd)
+        if (overlapStart < overlapEnd) {
+          const localOffset = overlapStart - segStart
+          const localCount = overlapEnd - overlapStart
+          segments.push({ state: st, localOffset, count: localCount })
+        }
+      }
+
+      const addrChunks = await Promise.all(
+        segments.map((seg) =>
+          getProposalsByState({
+            state: seg.state,
+            offset: seg.localOffset,
+            count: seg.count,
+            reverse: true,
+          }).then((addrs) => addrs.map((a) => ({ a, state: seg.state })))
+        )
+      )
+      const addrFlat: Array<{ a: `0x${string}`; state: HubProposalState }> = addrChunks.flat()
+
+      // Fetch proposal details and body for snippet in parallel
+      const details = await Promise.all(
+        addrFlat.map(({ a }) => readProposalDetails(a as `0x${string}`))
+      )
+      const bodies = await Promise.all(
+        addrFlat.map(({ a }) => readProposalBody(a as `0x${string}`))
+      )
+
+      const mapped: Proposal[] = details.map((d, i) => {
+        const st = addrFlat[i]?.state ?? HubProposalState.CLOSED
+        const md = parseProposalMarkdown(bodies[i] || '')
+        const plain = (md.body || bodies[i] || '')
+            .replace(/```[\s\S]*?```/g, ' ')
+            .replace(/`[^`]+`/g, ' ')
+            .replace(/!\[[^\]]*]\([^)]*\)/g, ' ')
+            .replace(/\[[^\]]*]\([^)]*\)/g, ' ')
+            .replace(/^>+\s?/gm, '')
+            .replace(/^#{1,6}\s+/gm, '')
+            .replace(/[*_~`>#-]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+          const snippet = plain.length > 500 ? `${plain.slice(0, 500)}…` : plain
+          return {
+          id: d.address,
+          title: d.title || '(untitled)',
+          author: d.author,
+          votes: Number(d.votesFor + d.votesAgainst),
+            quorum: 0,
+          timeAgo: formatTimeAgo(d.createdAt),
+            hasVoted: false,
+          status: stateToStatus(st),
+            snippet,
+          }
+        })
+
+        setProposals(mapped)
+      setCurrentPage(pageNum)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setLoadError(message)
+      setProposals([])
+    } finally {
+      setLoadingProposals(false)
+    }
+  }
+
+  // Initial load
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
-        setLoadingProposals(true)
-        setLoadError(null)
-        const page = await listProposalsPage({ pageSizeBlocks: 10 })
+        await refreshCounts()
         if (cancelled) return
-        const mapped: Proposal[] = page.items.map((l) => ({
-          id: l.id,
-          title: l.proposal || '(empty)',
-          author: l.author,
-          votes: 0,
-          quorum: 0,
-          timeAgo: formatTimeAgo(l.timestamp),
-          hasVoted: false,
-          status: 'active',
-        }))
-        setProposals(mapped)
-        setNextCursor(page.prevCursor)
+        await loadPage(1)
       } catch (err) {
         if (!cancelled) {
           const message = err instanceof Error ? err.message : String(err)
           setLoadError(message)
         }
-      } finally {
-        if (!cancelled) setLoadingProposals(false)
       }
     })()
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Reload on filter change
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        await refreshCounts()
+        if (cancelled) return
+        await loadPage(1)
+      } catch (err) {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : String(err)
+          setLoadError(message)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Array.from(selectedStates).join(',')])
 
   const handleSubmitProposal = async () => {
     if (!isConnected || !address) {
@@ -483,20 +663,9 @@ export default function GovernancePage() {
       await submitProposal(text)
       setShowCreate(false)
       setNewProposal('')
-      // Optionally refresh current page
-      const page = await listProposalsPage({ pageSizeBlocks: 10 })
-      const mapped: Proposal[] = page.items.map((l) => ({
-        id: l.id,
-        title: l.proposal || '(empty)',
-        author: l.author,
-        votes: 0,
-        quorum: 0,
-        timeAgo: formatTimeAgo(l.timestamp),
-        hasVoted: false,
-        status: 'active',
-      }))
-      setProposals(mapped)
-      setNextCursor(page.prevCursor)
+      // Refresh counts and reload first page
+      await refreshCounts()
+      await loadPage(1)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setSubmitError(message)
@@ -505,29 +674,19 @@ export default function GovernancePage() {
     }
   }
 
-  const loadOlder = async () => {
-    if (loadingNext || nextCursor === null) return
-    try {
-      setLoadingNext(true)
-      const page = await listProposalsPage({ endBlock: nextCursor, pageSizeBlocks: 10 })
-      const mapped: Proposal[] = page.items.map((l) => ({
-        id: l.id,
-        title: l.proposal || '(empty)',
-        author: l.author,
-        votes: 0,
-        quorum: 0,
-        timeAgo: formatTimeAgo(l.timestamp),
-        hasVoted: false,
-        status: 'active',
-      }))
-      // append, dedupe by id
-      const seen = new Set(proposals.map((p) => p.id))
-      const merged = proposals.concat(mapped.filter((m) => !seen.has(m.id)))
-      setProposals(merged)
-      setNextCursor(page.prevCursor)
-    } finally {
-      setLoadingNext(false)
-    }
+  const toggleState = (st: HubProposalState) => {
+    setSelectedStates((prev) => {
+      const next = new Set(prev)
+      if (next.has(st)) {
+        next.delete(st)
+      } else {
+        next.add(st)
+      }
+      if (next.size === 0) {
+        next.add(HubProposalState.ACTIVE)
+      }
+      return next
+    })
   }
 
   return (
@@ -585,6 +744,36 @@ export default function GovernancePage() {
             <SpaceSummary />
             <section className="snapshot-section">
               <header className="snapshot-section-heading">Proposals</header>
+              <div className="proposal-filters" role="group" aria-label="Filter proposals by type">
+                <button
+                  type="button"
+                  className={`proposal-filter-button${selectedStates.has(HubProposalState.ACTIVE) ? ' is-selected' : ''}`}
+                  onClick={() => toggleState(HubProposalState.ACTIVE)}
+                >
+                  Active ({countsByState[HubProposalState.ACTIVE] ?? 0})
+                </button>
+                <button
+                  type="button"
+                  className={`proposal-filter-button${selectedStates.has(HubProposalState.OPEN) ? ' is-selected' : ''}`}
+                  onClick={() => toggleState(HubProposalState.OPEN)}
+                >
+                  Open ({countsByState[HubProposalState.OPEN] ?? 0})
+                </button>
+                <button
+                  type="button"
+                  className={`proposal-filter-button${selectedStates.has(HubProposalState.DRAFT) ? ' is-selected' : ''}`}
+                  onClick={() => toggleState(HubProposalState.DRAFT)}
+                >
+                  Draft ({countsByState[HubProposalState.DRAFT] ?? 0})
+                </button>
+                <button
+                  type="button"
+                  className={`proposal-filter-button${selectedStates.has(HubProposalState.CLOSED) ? ' is-selected' : ''}`}
+                  onClick={() => toggleState(HubProposalState.CLOSED)}
+                >
+                  Closed ({countsByState[HubProposalState.CLOSED] ?? 0})
+                </button>
+              </div>
               <div className="proposal-list">
                 {loadingProposals && <div className="proposal-row">Loading proposals…</div>}
                 {loadError && <div className="proposal-row">Failed to load: {loadError}</div>}
@@ -593,19 +782,144 @@ export default function GovernancePage() {
                 )}
                 {!loadingProposals &&
                   !loadError &&
-                  proposals.map((proposal) => <ProposalRow key={proposal.id} {...proposal} />)}
+                  proposals.map((proposal) => (
+                    <ProposalRow
+                      key={proposal.id}
+                      {...proposal}
+                      onScheduleClick={(id) => {
+                        setScheduleForId(id)
+                        // Default schedule values: now → +7d
+                        const nowMs = Date.now()
+                        const plus7 = nowMs + 7 * 24 * 60 * 60 * 1000
+                        // Format to 'YYYY-MM-DDTHH:mm'
+                        const toLocal = (ms: number) => {
+                          const d = new Date(ms)
+                          const pad = (n: number) => n.toString().padStart(2, '0')
+                          const yyyy = d.getFullYear()
+                          const mm = pad(d.getMonth() + 1)
+                          const dd = pad(d.getDate())
+                          const hh = pad(d.getHours())
+                          const min = pad(d.getMinutes())
+                          return `${yyyy}-${mm}-${dd}T${hh}:${min}`
+                        }
+                        setScheduleStart(toLocal(nowMs))
+                        setScheduleEnd(toLocal(plus7))
+                        setScheduleError(null)
+                      }}
+                    />
+                  ))}
               </div>
-              <a
-                href="#"
-                className="proposal-see-more"
-                onClick={(e) => {
-                  e.preventDefault()
-                  loadOlder()
-                }}
-                aria-disabled={nextCursor === null || loadingNext}
-              >
-                {loadingNext ? 'Loading…' : nextCursor === null ? 'No more' : 'Load older'}
-              </a>
+              {scheduleForId && (
+                <div className="proposal-row" style={{ display: 'block' }}>
+                  <label style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>
+                    Schedule voting window for #{scheduleForId.slice(0, 6)}…
+                  </label>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 6 }}>Start</div>
+                      <input
+                        type="datetime-local"
+                        value={scheduleStart}
+                        onChange={(e) => setScheduleStart(e.target.value)}
+                        className="snapshot-input"
+                      />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 6 }}>End</div>
+                      <input
+                        type="datetime-local"
+                        value={scheduleEnd}
+                        onChange={(e) => setScheduleEnd(e.target.value)}
+                        className="snapshot-input"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="snapshot-header-button"
+                      disabled={scheduleSubmitting}
+                      onClick={async () => {
+                        if (!scheduleForId) return
+                        try {
+                          setScheduleSubmitting(true)
+                          setScheduleError(null)
+                          const toEpoch = (val: string) => {
+                            if (!val) return 0
+                            const ms = Date.parse(val)
+                            return ms > 0 ? Math.floor(ms / 1000) : 0
+                          }
+                          const start = toEpoch(scheduleStart)
+                          const end = toEpoch(scheduleEnd)
+                          // Enforce either both zero or end > start
+                          if (!((start === 0 && end === 0) || end > start)) {
+                            setScheduleError('Invalid window: either clear both or set end > start.')
+                            setScheduleSubmitting(false)
+                            return
+                          }
+                          const { setVotingWindow, syncProposalState } = await import('../web3/governanceHubActions')
+                          await setVotingWindow({ proposal: scheduleForId as `0x${string}`, voteStart: start, voteEnd: end })
+                          // Ensure state reflects new window immediately
+                          await syncProposalState(scheduleForId as `0x${string}`)
+                          // Refresh list
+                          await refreshCounts()
+                          await loadPage(currentPage)
+                          setScheduleForId(null)
+                        } catch (err) {
+                          const message = err instanceof Error ? err.message : String(err)
+                          setScheduleError(message)
+                        } finally {
+                          setScheduleSubmitting(false)
+                        }
+                      }}
+                    >
+                      {scheduleSubmitting ? 'Saving…' : 'Save window'}
+                    </button>
+                    <button
+                      type="button"
+                      className="snapshot-header-button snapshot-header-button-icon"
+                      onClick={() => {
+                        setScheduleForId(null)
+                        setScheduleError(null)
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    {scheduleError && <span style={{ color: 'crimson' }}>{scheduleError}</span>}
+                    <span style={{ color: '#6b7280', fontSize: 13 }}>
+                      Tip: leave both empty to clear the window (stays in Draft).
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div className="proposal-pagination" aria-label="Pagination">
+                <button
+                  type="button"
+                  className="proposal-pagination-button"
+                  onClick={() => loadPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage <= 1 || loadingProposals}
+                >
+                  Prev
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`proposal-pagination-button${p === currentPage ? ' is-current' : ''}`}
+                    onClick={() => loadPage(p)}
+                    disabled={loadingProposals}
+                    aria-current={p === currentPage ? 'page' : undefined}
+                  >
+                    {p}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="proposal-pagination-button"
+                  onClick={() => loadPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage >= totalPages || loadingProposals}
+                >
+                  Next
+                </button>
+              </div>
             </section>
           </div>
         </div>

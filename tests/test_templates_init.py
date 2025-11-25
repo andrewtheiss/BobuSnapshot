@@ -137,6 +137,7 @@ def test_comment_template_initialize_sets_fields(accounts):
         author.address,
         content,
         created,
+        3,
         sender=deployer,
     )
 
@@ -164,6 +165,7 @@ def test_comment_template_cannot_reinitialize(accounts):
         author.address,
         "First",
         1,
+        1,
         sender=deployer,
     )
     assert template.initialized() is True
@@ -174,6 +176,7 @@ def test_comment_template_cannot_reinitialize(accounts):
             proposal_account.address,
             author.address,
             "Second",
+            2,
             2,
             sender=deployer,
         )
@@ -196,6 +199,7 @@ def test_comment_template_requires_hub_and_proposal(accounts):
             author.address,
             "Content",
             1,
+            3,
             sender=deployer,
         )
 
@@ -207,6 +211,7 @@ def test_comment_template_requires_hub_and_proposal(accounts):
             author.address,
             "Content",
             1,
+            3,
             sender=deployer,
         )
 
@@ -223,6 +228,7 @@ def test_comment_template_mark_deleted_direct(accounts, project):
         author.address,
         "Comment to delete",
         created_at,
+        1,
         sender=deployer,
     )
 

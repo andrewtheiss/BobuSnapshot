@@ -72,43 +72,86 @@ export function tinyMarkdownToHtml(markdown: string): string {
 
 export function htmlToMarkdown(html: string): string {
   if (!html) return ''
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(html, 'text/html')
 
-  // Simple HTML to markdown converter
-  let md = html
+  // Convert Quill code blocks: ql-code-block-container -> ``` multiline ```
+  const codeContainers = Array.from(doc.querySelectorAll('div.ql-code-block-container'))
+  for (const container of codeContainers) {
+    const lines = Array.from(container.querySelectorAll('div.ql-code-block')).map((el) => el.textContent ?? '')
+    const md = `\n\`\`\`\n${lines.join('\n')}\n\`\`\`\n`
+    const replacement = doc.createElement('pre')
+    replacement.textContent = md
+    container.replaceWith(replacement)
+  }
 
-  // Headers
-  md = md.replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n\n')
-  md = md.replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n\n')
-  md = md.replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n\n')
+  const walk = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) return (node.textContent ?? '')
+    if (node.nodeType !== Node.ELEMENT_NODE) return ''
+    const el = node as HTMLElement
+    const tag = el.tagName.toLowerCase()
+    const inner = () => Array.from(el.childNodes).map(walk).join('')
+    switch (tag) {
+      case 'h1':
+        return `# ${inner()}\n\n`
+      case 'h2':
+        return `## ${inner()}\n\n`
+      case 'h3':
+        return `### ${inner()}\n\n`
+      case 'strong':
+      case 'b':
+        return `**${inner()}**`
+      case 'em':
+      case 'i':
+        return `*${inner()}*`
+      case 'u':
+        return inner()
+      case 'code': {
+        // Inline code
+        const text = el.textContent ?? ''
+        return '`' + text.replace(/`/g, '\\`') + '`'
+      }
+      case 'pre': {
+        const text = el.textContent ?? ''
+        // If already wrapped as markdown block (from container conversion), return as-is
+        if (text.trim().startsWith('```')) return text + '\n'
+        return `\n\`\`\`\n${text}\n\`\`\`\n`
+      }
+      case 'blockquote':
+        return inner()
+          .split('\n')
+          .map((l) => (l.trim() ? `> ${l}` : ''))
+          .join('\n') + '\n\n'
+      case 'a': {
+        const href = el.getAttribute('href') ?? ''
+        const text = inner().trim() || href
+        return `[${text}](${href})`
+      }
+      case 'ul': {
+        const items = Array.from(el.children)
+          .filter((c) => c.tagName.toLowerCase() === 'li')
+          .map((li) => `- ${walk(li)}`)
+          .join('\n')
+        return items + '\n\n'
+      }
+      case 'ol': {
+        const items = Array.from(el.children)
+          .filter((c) => c.tagName.toLowerCase() === 'li')
+          .map((li, i) => `${i + 1}. ${walk(li)}`)
+          .join('\n')
+        return items + '\n\n'
+      }
+      case 'li':
+        return inner()
+      case 'br':
+        return '\n'
+      case 'p':
+        return inner().trim() ? inner() + '\n\n' : '\n'
+      default:
+        return inner()
+    }
+  }
 
-  // Bold
-  md = md.replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**')
-  md = md.replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**')
-
-  // Italic
-  md = md.replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*')
-  md = md.replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*')
-
-  // Code
-  md = md.replace(/<code[^>]*>(.*?)<\/code>/gi, '`$1`')
-  md = md.replace(/<pre[^>]*><code[^>]*>([\s\S]*?)<\/code><\/pre>/gi, '```\n$1\n```\n\n')
-
-  // Links
-  md = md.replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
-
-  // Lists
-  md = md.replace(/<ul[^>]*>([\s\S]*?)<\/ul>/gi, '$1\n')
-  md = md.replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, '$1\n')
-  md = md.replace(/<li[^>]*>(.*?)<\/li>/gi, '* $1')
-
-  // Paragraphs
-  md = md.replace(/<\/?p[^>]*>/gi, '')
-
-  // Blockquotes
-  md = md.replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gi, '> $1')
-
-  // Clean up extra newlines
-  md = md.replace(/\n{3,}/g, '\n\n').trim()
-
-  return md
+  const out = walk(doc.body)
+  return out.replace(/\n{3,}/g, '\n\n').trim()
 }

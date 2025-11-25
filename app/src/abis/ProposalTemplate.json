@@ -60,6 +60,22 @@
   {
     "inputs": [
       {
+        "name": "_voteStart",
+        "type": "uint256"
+      },
+      {
+        "name": "_voteEnd",
+        "type": "uint256"
+      }
+    ],
+    "name": "hubSetVotingWindow",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "name": "_comment",
         "type": "address"
       }
