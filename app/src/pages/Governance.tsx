@@ -537,7 +537,7 @@ export default function GovernancePage() {
         <div className="snapshot-main">
           <SnapshotHeader
             canCreate={isConnected && hasAccessToken && !checkingAccess}
-            onCreate={() => setShowCreate(true)}
+            onCreate={() => { window.location.hash = '#/new' }}
           />
           <div className="snapshot-content">
             {showCreate && (
