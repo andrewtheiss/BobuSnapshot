@@ -182,4 +182,131 @@ export async function createProposalOnHub(title: string, body: string, voteStart
   })
 }
 
+// --------------------------
+// Comments
+// --------------------------
+export async function hubHasToken(user: Address) {
+  ensureHubConfigured()
+  return readContract(wagmiConfig, {
+    address: ACTIVE_CONTRACTS.governanceHub.address,
+    abi: ABIS.GovernanceHub,
+    functionName: 'hasToken',
+    args: [user],
+    chainId: ACTIVE_CHAIN_ID,
+  })
+}
+
+export async function isCommentsGated(): Promise<boolean> {
+  ensureHubConfigured()
+  const result = await readContract(wagmiConfig, {
+    address: ACTIVE_CONTRACTS.governanceHub.address,
+    abi: ABIS.GovernanceHub,
+    functionName: 'gateComments',
+    args: [],
+    chainId: ACTIVE_CHAIN_ID,
+  })
+  return Boolean(result)
+}
+
+export type CommentAddressPage = {
+  items: Address[]
+  from: number
+  count: number
+  hasMore: boolean
+}
+
+export async function listCommentAddresses(opts: {
+  proposal: Address
+  offset?: number
+  count?: number
+  reverse?: boolean
+}): Promise<CommentAddressPage> {
+  const proposal = opts.proposal
+  const offset = Math.max(0, opts.offset ?? 0)
+  const count = Math.max(1, Math.min(100, opts.count ?? 20)) // PAGE_LIMIT is 100 on chain
+  const reverse = opts.reverse ?? true
+  const result = (await readContract(wagmiConfig, {
+    address: proposal,
+    abi: ABIS.ProposalTemplate,
+    functionName: 'getComments',
+    args: [BigInt(offset), BigInt(count), reverse],
+    chainId: ACTIVE_CHAIN_ID,
+  })) as readonly Address[]
+  return {
+    items: Array.from(result),
+    from: offset,
+    count: result.length,
+    hasMore: result.length === count,
+  }
+}
+
+export type CommentDetail = {
+  address: Address
+  author: Address
+  content: string
+  createdAt: number
+  deleted: boolean
+  sentiment: number
+}
+
+export async function readCommentDetail(comment: Address): Promise<CommentDetail> {
+  const [author, content, createdAt, deleted, sentiment] = await Promise.all([
+    readContract(wagmiConfig, {
+      address: comment,
+      abi: ABIS.CommentTemplate,
+      functionName: 'author',
+      args: [],
+      chainId: ACTIVE_CHAIN_ID,
+    }),
+    readContract(wagmiConfig, {
+      address: comment,
+      abi: ABIS.CommentTemplate,
+      functionName: 'content',
+      args: [],
+      chainId: ACTIVE_CHAIN_ID,
+    }),
+    readContract(wagmiConfig, {
+      address: comment,
+      abi: ABIS.CommentTemplate,
+      functionName: 'createdAt',
+      args: [],
+      chainId: ACTIVE_CHAIN_ID,
+    }),
+    readContract(wagmiConfig, {
+      address: comment,
+      abi: ABIS.CommentTemplate,
+      functionName: 'deleted',
+      args: [],
+      chainId: ACTIVE_CHAIN_ID,
+    }),
+    readContract(wagmiConfig, {
+      address: comment,
+      abi: ABIS.CommentTemplate,
+      functionName: 'sentiment',
+      args: [],
+      chainId: ACTIVE_CHAIN_ID,
+    }),
+  ])
+  return {
+    address: comment,
+    author: author as Address,
+    content: String(content),
+    createdAt: Number(createdAt as bigint),
+    deleted: Boolean(deleted),
+    sentiment: Number(sentiment as bigint),
+  }
+}
+
+export async function addComment(opts: { proposal: Address; content: string; sentiment?: number }) {
+  ensureHubConfigured()
+  const { proposal, content, sentiment = 3 } = opts
+  return writeContract(wagmiConfig, {
+    address: ACTIVE_CONTRACTS.governanceHub.address,
+    abi: ABIS.GovernanceHub,
+    functionName: 'addComment',
+    args: [proposal, content, BigInt(sentiment)],
+    chainId: ACTIVE_CHAIN_ID,
+  })
+}
+
 

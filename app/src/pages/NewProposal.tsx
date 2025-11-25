@@ -11,6 +11,7 @@ export default function NewProposal() {
   const [bodyHtml, setBodyHtml] = useState('')
   const [showPreview, setShowPreview] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [submitNotice, setSubmitNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const { address, isConnected } = useAccount()
   const textRef = useRef<HTMLTextAreaElement | null>(null)
@@ -44,17 +45,23 @@ export default function NewProposal() {
       const fullMarkdown = composeProposalMarkdown(trimmedTitle, address, bodyMarkdown)
       // Create as DRAFT by default (0,0); you can schedule on the main page
       await createProposalOnHub(trimmedTitle, fullMarkdown, 0, 0)
-      // Success: redirect back to governance
-      window.location.hash = '#/s:bobu.eth'
+      setSubmitNotice('Submitted. Reloading…')
+      setTimeout(() => window.location.reload(), 900)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       const lower = message.toLowerCase()
       if (lower.includes('denied') || lower.includes('rejected')) {
         setError('Transaction cancelled by user.')
+        setSubmitNotice('Cancelled. Reloading…')
+        setTimeout(() => window.location.reload(), 1100)
       } else if (lower.includes('insufficient funds')) {
         setError('Insufficient funds to pay gas. Please top up and try again.')
+        setSubmitNotice('Failed. Reloading…')
+        setTimeout(() => window.location.reload(), 1500)
       } else {
         setError(`Submission failed: ${message.split('\n')[0].slice(0, 160)}`)
+        setSubmitNotice('Failed. Reloading…')
+        setTimeout(() => window.location.reload(), 1500)
       }
     } finally {
       setSubmitting(false)
@@ -64,6 +71,7 @@ export default function NewProposal() {
   const togglePreview = () => setShowPreview((v) => !v)
 
   return (
+    <>
     <div className="governance-root">
       <div className="snapshot-layout">
         <aside className="snapshot-sidebar" aria-label="Navigation">
@@ -143,5 +151,14 @@ export default function NewProposal() {
         </div>
       </div>
     </div>
+    {(submitting || submitNotice) && (
+      <div className="loading-overlay" role="status" aria-live="polite">
+        <div className="loading-overlay-inner">
+          <span className="loading-spinner" aria-hidden="true" />
+          <span>{submitNotice || 'Submitting transaction…'}</span>
+        </div>
+      </div>
+    )}
+    </>
   )
 }

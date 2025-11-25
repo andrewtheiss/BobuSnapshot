@@ -3,6 +3,7 @@ import ERC1155 from './ERC1155.json'
 import ProposalContract from './ProposalContract.json'
 import GovernanceHub from './GovernanceHub.json'
 import ProposalTemplate from './ProposalTemplate.json'
+import CommentTemplate from './CommentTemplate.json'
 
 export const ABIS = {
   ERC1155,
@@ -10,6 +11,7 @@ export const ABIS = {
   ProposalContract,
   GovernanceHub,
   ProposalTemplate,
+  CommentTemplate,
 } as const
 
 export type ERC1155Abi = typeof ERC1155
@@ -17,5 +19,6 @@ export type ERC721Abi = typeof ERC721
 export type ProposalContractAbi = typeof ProposalContract
 export type GovernanceHubAbi = typeof GovernanceHub
 export type ProposalTemplateAbi = typeof ProposalTemplate
+export type CommentTemplateAbi = typeof CommentTemplate
 
 

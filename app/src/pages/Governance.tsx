@@ -145,25 +145,8 @@ function SnapshotHeader({
         <span className="snapshot-header-name">Bobu</span>
         </div>
 
-      <form className="snapshot-header-search" role="search">
-        <label className="snapshot-header-search-label">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="1.5"
-              d="m21 21l-6-6m2-5a7 7 0 1 1-14 0a7 7 0 0 1 14 0"
-            />
-          </svg>
-          <input
-            type="search"
-            placeholder="Search for a proposal"
-            className="snapshot-header-search-input"
-          />
-        </label>
-      </form>
+      {/* Search bubble hidden for now */}
+      <div style={{ display: 'none' }} />
 
       <div className="snapshot-header-actions">
         <button
@@ -225,7 +208,7 @@ function SpaceHero() {
   )
 }
 
-function SpaceSummary() {
+function SpaceSummary({ countsByState }: { countsByState: Record<number, number> }) {
   return (
     <section className="space-summary">
       <img src={bobuAvatar} alt="Bobu avatar" className="space-summary-avatar" />
@@ -244,11 +227,13 @@ function SpaceSummary() {
           </span>
         </div>
         <div className="space-summary-stats">
-          <span><strong>24</strong> proposals</span>
+          <span><strong>Draft</strong>: {countsByState[HubProposalState.DRAFT] ?? 0}</span>
           <span className="space-summary-dot">·</span>
-          <span><strong>5.9k</strong> votes</span>
+          <span><strong>Open</strong>: {countsByState[HubProposalState.OPEN] ?? 0}</span>
           <span className="space-summary-dot">·</span>
-          <span><strong>427</strong> followers</span>
+          <span><strong>Active</strong>: {countsByState[HubProposalState.ACTIVE] ?? 0}</span>
+          <span className="space-summary-dot">·</span>
+          <span><strong>Closed</strong>: {countsByState[HubProposalState.CLOSED] ?? 0}</span>
         </div>
         <p className="space-summary-description">
           Current home of the Bobu governance community.
@@ -433,7 +418,7 @@ export default function GovernancePage() {
     [HubProposalState.CLOSED]: 0,
   })
   const [selectedStates, setSelectedStates] = useState<Set<number>>(
-    () => new Set<number>([HubProposalState.ACTIVE, HubProposalState.DRAFT])
+    () => new Set<number>([HubProposalState.DRAFT])
   )
   const [showCreate, setShowCreate] = useState<boolean>(false)
   const [newProposal, setNewProposal] = useState<string>('')
@@ -486,9 +471,9 @@ export default function GovernancePage() {
   }
 
   const STATE_ORDER: HubProposalState[] = [
+    HubProposalState.DRAFT,
     HubProposalState.ACTIVE,
     HubProposalState.OPEN,
-    HubProposalState.DRAFT,
     HubProposalState.CLOSED,
   ]
 
@@ -507,20 +492,29 @@ export default function GovernancePage() {
       getProposalCountByState(HubProposalState.ACTIVE),
       getProposalCountByState(HubProposalState.CLOSED),
     ])
-    setCountsByState({
+    const counts = {
       [HubProposalState.DRAFT]: draft,
       [HubProposalState.OPEN]: open,
       [HubProposalState.ACTIVE]: active,
       [HubProposalState.CLOSED]: closed,
-    })
+    } as Record<number, number>
+    setCountsByState(counts)
+    return counts
   }
 
-  const loadPage = async (pageNum: number) => {
+  const loadPage = async (
+    pageNum: number,
+    countsOverride?: Record<number, number>,
+    selectedStatesOverride?: HubProposalState[]
+  ) => {
         setLoadingProposals(true)
         setLoadError(null)
     try {
+      const counts = countsOverride ?? countsByState
+      const selectedOrdered = selectedStatesOverride ?? selectedStatesOrdered
+      const selectedTotal = selectedOrdered.reduce((acc, s) => acc + (counts[s] ?? 0), 0)
       const startIndex = (pageNum - 1) * PAGE_SIZE
-      const endIndexExclusive = Math.min(totalSelectedCount, startIndex + PAGE_SIZE)
+      const endIndexExclusive = Math.min(selectedTotal, startIndex + PAGE_SIZE)
 
       const segments: Array<{
         state: HubProposalState
@@ -529,8 +523,8 @@ export default function GovernancePage() {
       }> = []
 
       let cumulative = 0
-      for (const st of selectedStatesOrdered) {
-        const cnt = countsByState[st] ?? 0
+      for (const st of selectedOrdered) {
+        const cnt = counts[st] ?? 0
         const segStart = cumulative
         const segEnd = cumulative + cnt
         cumulative += cnt
@@ -606,9 +600,9 @@ export default function GovernancePage() {
     let cancelled = false
     ;(async () => {
       try {
-        await refreshCounts()
+        const counts = await refreshCounts()
         if (cancelled) return
-        await loadPage(1)
+        await loadPage(1, counts, STATE_ORDER.filter((s) => selectedStates.has(s)))
       } catch (err) {
         if (!cancelled) {
           const message = err instanceof Error ? err.message : String(err)
@@ -627,9 +621,9 @@ export default function GovernancePage() {
     let cancelled = false
     ;(async () => {
       try {
-        await refreshCounts()
+        const counts = await refreshCounts()
         if (cancelled) return
-        await loadPage(1)
+        await loadPage(1, counts, STATE_ORDER.filter((s) => selectedStates.has(s)))
       } catch (err) {
         if (!cancelled) {
           const message = err instanceof Error ? err.message : String(err)
@@ -664,8 +658,8 @@ export default function GovernancePage() {
       setShowCreate(false)
       setNewProposal('')
       // Refresh counts and reload first page
-      await refreshCounts()
-      await loadPage(1)
+      const counts = await refreshCounts()
+      await loadPage(1, counts, STATE_ORDER.filter((s) => selectedStates.has(s)))
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setSubmitError(message)
@@ -741,7 +735,7 @@ export default function GovernancePage() {
               </section>
             )}
             <SpaceHero />
-            <SpaceSummary />
+            <SpaceSummary countsByState={countsByState} />
             <section className="snapshot-section">
               <header className="snapshot-section-heading">Proposals</header>
               <div className="proposal-filters" role="group" aria-label="Filter proposals by type">
