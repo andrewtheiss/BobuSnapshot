@@ -10,6 +10,8 @@ import {
   addComment,
   hubHasToken,
   isCommentsGated,
+  setActiveByCreatorOrAdmin,
+  syncProposalState,
   type Address,
 } from '../web3/governanceHubActions'
 import MarkdownPreview from '../components/MarkdownPreview'
@@ -183,6 +185,68 @@ export default function ProposalDetailsPage() {
                   <>
                     <h2 style={{ margin: 0, fontSize: 24 }}>{title}</h2>
                     <div style={{ color: '#6b7280', marginTop: 6, fontSize: 14 }}>{detailsMeta}</div>
+                    {isConnected && (
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
+                        <button
+                          type="button"
+                          className="snapshot-header-button"
+                          onClick={async () => {
+                            if (!proposalAddr) return
+                            try {
+                              await setActiveByCreatorOrAdmin(proposalAddr, true)
+                              await syncProposalState(proposalAddr)
+                              window.location.reload()
+                            } catch (err) {
+                              const message = err instanceof Error ? err.message : String(err)
+                              alert(
+                                message.toLowerCase().includes('admin') || message.toLowerCase().includes('author')
+                                  ? 'Only the author or an admin can mark active.'
+                                  : message
+                              )
+                            }
+                          }}
+                        >
+                          Set Active
+                        </button>
+                        <button
+                          type="button"
+                          className="snapshot-header-button"
+                          onClick={async () => {
+                            if (!proposalAddr) return
+                            try {
+                              await setActiveByCreatorOrAdmin(proposalAddr, false)
+                              await syncProposalState(proposalAddr)
+                              window.location.reload()
+                            } catch (err) {
+                              const message = err instanceof Error ? err.message : String(err)
+                              alert(
+                                message.toLowerCase().includes('admin') || message.toLowerCase().includes('author')
+                                  ? 'Only the author or an admin can close the proposal.'
+                                  : message
+                              )
+                            }
+                          }}
+                        >
+                          Close Proposal
+                        </button>
+                        <button
+                          type="button"
+                          className="snapshot-header-button"
+                          onClick={async () => {
+                            if (!proposalAddr) return
+                            try {
+                              await syncProposalState(proposalAddr)
+                              window.location.reload()
+                            } catch (err) {
+                              const message = err instanceof Error ? err.message : String(err)
+                              alert(message)
+                            }
+                          }}
+                        >
+                          Sync Status
+                        </button>
+                      </div>
+                    )}
                     <div style={{ marginTop: 16 }}>
                       <MarkdownPreview markdown={bodyMd} />
                     </div>

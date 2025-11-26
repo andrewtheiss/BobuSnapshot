@@ -20,6 +20,7 @@ body.governance-light #root {
   background-color: #ffffff;
   color: #0f172a;
   flex: 1;
+  display: block;
 }
 
 .snapshot-sidebar {
@@ -77,9 +78,11 @@ body.governance-light #root {
 }
 
 .snapshot-main {
-  margin-left: 240px;
   min-height: 100vh;
   background-color: #ffffff;
+  max-width: 1120px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .snapshot-header {
@@ -160,6 +163,7 @@ body.governance-light #root {
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-left: auto;
 }
 
 .snapshot-header-button {
@@ -599,7 +603,8 @@ body.governance-light #root {
 
 @media (max-width: 1200px) {
   .snapshot-main {
-    margin-left: 0;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .snapshot-sidebar {
@@ -640,7 +645,8 @@ body.governance-light #root {
   }
 
   .snapshot-main {
-    margin-left: 0;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .snapshot-content {

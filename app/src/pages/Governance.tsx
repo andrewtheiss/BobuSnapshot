@@ -36,8 +36,8 @@ type Proposal = {
 
 const NAV_ITEMS: NavItem[] = [
   {
-    id: 'governance',
-    label: 'Governance',
+    id: 'proposals',
+    label: 'Proposals',
     href: '#/s:bobu.eth',
     isActive: true,
     icon: (
@@ -48,45 +48,11 @@ const NAV_ITEMS: NavItem[] = [
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth="1.5"
-          d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 0 1 9-9"
-        />
-      </svg>
-    )
-  },
-  {
-    id: 'proposals',
-    label: 'Proposals',
-    href: '#/s:bobu.eth/proposals',
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          fill="none"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="1.5"
           d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V7m2 13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7z"
         />
-    </svg>
-    )
+      </svg>
+    ),
   },
-  {
-    id: 'leaderboard',
-    label: 'Leaderboard',
-    href: '#/s:bobu.eth/leaderboard',
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          fill="none"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="1.5"
-          d="M17 20h5v-2a3 3 0 0 0-5.356-1.857M17 20v-2c0-.656-.126-1.283-.356-1.857m0 0a5.002 5.002 0 0 0-3.693-2.87M17 20H7M7 20H2v-2a3 3 0 0 1 5.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 0 1 3.693-2.87M15 7a3 3 0 1 1-6 0a3 3 0 0 1 6 0m6 3a2 2 0 1 1-4 0a2 2 0 0 1 4 0M7 10a2 2 0 1 1-4 0a2 2 0 0 1 4 0"
-        />
-    </svg>
-  )
-  }
 ]
 
 function formatTimeAgo(tsSeconds: number): string {
@@ -183,18 +149,7 @@ function SnapshotHeader({
             <span>{isConnecting ? 'Connecting…' : 'Log in'}</span>
           )}
         </button>
-        <button type="button" className="snapshot-header-button snapshot-header-button-icon" aria-label="Toggle theme">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="1.5"
-              d="M20.354 15.354A9 9 0 0 1 8.646 3.646A9.003 9.003 0 0 0 12 21a9 9 0 0 0 8.354-5.646"
-            />
-          </svg>
-        </button>
+        {/* Theme toggle removed */}
       </div>
     </header>
   )
@@ -686,7 +641,6 @@ export default function GovernancePage() {
   return (
     <div className="governance-root">
       <div className="snapshot-layout">
-        <SnapshotSidebar />
         <div className="snapshot-main">
           <SnapshotHeader
             canCreate={isConnected && hasAccessToken && !checkingAccess}

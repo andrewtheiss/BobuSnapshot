@@ -171,6 +171,17 @@ export async function syncProposalState(proposal: Address) {
   })
 }
 
+export async function setActiveByCreatorOrAdmin(proposal: Address, active: boolean) {
+  ensureHubConfigured()
+  return writeContract(wagmiConfig, {
+    address: ACTIVE_CONTRACTS.governanceHub.address,
+    abi: ABIS.GovernanceHub,
+    functionName: 'setActiveByCreatorOrAdmin',
+    args: [proposal, active],
+    chainId: ACTIVE_CHAIN_ID,
+  })
+}
+
 export async function createProposalOnHub(title: string, body: string, voteStart: number, voteEnd: number) {
   ensureHubConfigured()
   return writeContract(wagmiConfig, {

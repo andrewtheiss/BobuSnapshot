@@ -74,27 +74,6 @@ export default function NewProposal() {
     <>
     <div className="governance-root">
       <div className="snapshot-layout">
-        <aside className="snapshot-sidebar" aria-label="Navigation">
-          <div className="snapshot-sidebar-inner">
-            <nav className="snapshot-sidebar-nav">
-              <a href="#/s:bobu.eth" className="snapshot-sidebar-link">
-                <span className="snapshot-sidebar-icon">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="1.5"
-                      d="M21 12a9 9 0 0 1-9 9m9-9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 0 1 9-9"
-                    />
-                  </svg>
-                </span>
-                <span className="snapshot-sidebar-label">Back to Governance</span>
-              </a>
-            </nav>
-          </div>
-        </aside>
         <div className="snapshot-main">
           <header className="snapshot-header">
             <div className="snapshot-header-space">
