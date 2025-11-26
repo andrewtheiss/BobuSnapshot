@@ -27,10 +27,8 @@ export default function RichTextEditor({ markdown, onChangeMarkdown }: Props) {
     const instance = new Crepe({
       root: rootRef.current,
       defaultValue: markdown || '',
-      features: {
-        [Crepe.Feature.CodeMirror]: false,
-        [Crepe.Feature.BlockEdit]: false,
-      },
+      // Disable optional features; use empty object to avoid type issues without the package types
+      features: {} as any,
     })
     instance
       .create()

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import type { JSX } from 'react'
 import { useAccount, useConnect, useDisconnect } from 'wagmi'
 import './Governance.css'
 import bobuAvatar from '../assets/bobuthefarmer.webp'
@@ -14,13 +13,7 @@ import {
 } from '../web3/governanceHubActions'
 import { parseProposalMarkdown } from '../utils/proposalMarkdown'
 
-type NavItem = {
-  id: string
-  label: string
-  href: string
-  icon: JSX.Element
-  isActive?: boolean
-}
+// Sidebar nav types removed (unused)
 
 type Proposal = {
   id: string
@@ -33,27 +26,6 @@ type Proposal = {
   status: 'draft' | 'open' | 'active' | 'closed'
   snippet?: string
 }
-
-const NAV_ITEMS: NavItem[] = [
-  {
-    id: 'proposals',
-    label: 'Proposals',
-    href: '#/s:bobu.eth',
-    isActive: true,
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          fill="none"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="1.5"
-          d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V7m2 13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7z"
-        />
-      </svg>
-    ),
-  },
-]
 
 function formatTimeAgo(tsSeconds: number): string {
   const now = Date.now() / 1000
@@ -69,27 +41,6 @@ function formatTimeAgo(tsSeconds: number): string {
   if (hours >= 1) return `${hours}h ago`
   if (minutes >= 1) return `${minutes}m ago`
   return 'just now'
-}
-
-function SnapshotSidebar() {
-  return (
-    <aside className="snapshot-sidebar" aria-label="Navigation">
-      <div className="snapshot-sidebar-inner">
-        <nav className="snapshot-sidebar-nav">
-          {NAV_ITEMS.map((item) => (
-            <a
-              key={item.id}
-              href={item.href}
-              className={`snapshot-sidebar-link${item.isActive ? ' is-active' : ''}`}
-            >
-              <span className="snapshot-sidebar-icon">{item.icon}</span>
-              <span className="snapshot-sidebar-label">{item.label}</span>
-            </a>
-          ))}
-        </nav>
-          </div>
-    </aside>
-  )
 }
 
 function SnapshotHeader({
@@ -434,7 +385,7 @@ export default function GovernancePage() {
 
   const selectedStatesOrdered = STATE_ORDER.filter((s) => selectedStates.has(s))
 
-  const totalSelectedCount = selectedStatesOrdered.reduce(
+  const totalSelectedCount = selectedStatesOrdered.reduce<number>(
     (acc, s) => acc + (countsByState[s] ?? 0),
     0
   )
@@ -467,7 +418,7 @@ export default function GovernancePage() {
     try {
       const counts = countsOverride ?? countsByState
       const selectedOrdered = selectedStatesOverride ?? selectedStatesOrdered
-      const selectedTotal = selectedOrdered.reduce((acc, s) => acc + (counts[s] ?? 0), 0)
+      const selectedTotal = selectedOrdered.reduce<number>((acc, s) => acc + (counts[s] ?? 0), 0)
       const startIndex = (pageNum - 1) * PAGE_SIZE
       const endIndexExclusive = Math.min(selectedTotal, startIndex + PAGE_SIZE)
 

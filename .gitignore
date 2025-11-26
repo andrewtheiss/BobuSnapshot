@@ -4,3 +4,7 @@
 .env
 
 tests/__pycache__/
+
+app/.firebase/
+
+app/public/assets/

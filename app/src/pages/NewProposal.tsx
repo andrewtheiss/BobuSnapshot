@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
 import QuillEditor from '../components/QuillEditor'
 import { composeProposalMarkdown } from '../utils/proposalMarkdown'
@@ -14,7 +14,6 @@ export default function NewProposal() {
   const [submitNotice, setSubmitNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const { address, isConnected } = useAccount()
-  const textRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
     document.body.classList.add('governance-light')

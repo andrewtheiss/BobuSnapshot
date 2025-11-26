@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import Quill from 'quill'
+import type { QuillOptions } from 'quill'
 import 'quill/dist/quill.snow.css'
 
 type Props = {
@@ -15,7 +16,7 @@ export default function QuillEditor({ html, onChangeHtml, readOnly }: Props) {
 
   useEffect(() => {
     if (!editorRef.current) return
-    const options: Quill.Options = {
+    const options: QuillOptions = {
       theme: 'snow',
       readOnly: Boolean(readOnly),
       modules: {

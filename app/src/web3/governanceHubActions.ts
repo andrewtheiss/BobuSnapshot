@@ -6,12 +6,13 @@ import { ACTIVE_CHAIN_ID } from '../config/environment'
 
 export type Address = `0x${string}`
 
-export enum HubProposalState {
-  DRAFT = 0,
-  OPEN = 1,
-  ACTIVE = 2,
-  CLOSED = 3,
-}
+export const HubProposalState = {
+  DRAFT: 0,
+  OPEN: 1,
+  ACTIVE: 2,
+  CLOSED: 3,
+} as const
+export type HubProposalState = typeof HubProposalState[keyof typeof HubProposalState]
 
 const hubConfig = ACTIVE_CONTRACTS.governanceHub
 
