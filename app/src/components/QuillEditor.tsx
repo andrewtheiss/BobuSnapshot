@@ -13,6 +13,7 @@ export default function QuillEditor({ html, onChangeHtml, readOnly }: Props) {
   const editorRef = useRef<HTMLDivElement | null>(null)
   const toolbarRef = useRef<HTMLDivElement | null>(null)
   const quillRef = useRef<Quill | null>(null)
+  const skipHtmlSyncRef = useRef(false)
 
   useEffect(() => {
     if (!editorRef.current) return
@@ -23,18 +24,56 @@ export default function QuillEditor({ html, onChangeHtml, readOnly }: Props) {
         toolbar: toolbarRef.current ?? true,
         history: { delay: 500, maxStack: 100, userOnly: true },
       },
+      formats: [
+        'header',
+        'bold', 'italic', 'underline', 'strike', 'link',
+        'blockquote', 'code-block',
+        'list', 'align', 'color', 'background',
+      ],
     }
     const q = new Quill(editorRef.current, options)
     quillRef.current = q
     if (html) {
-      q.root.innerHTML = html
+      try {
+        // Prefer clipboard API so Quill maintains a valid Delta and selection
+        ;(q as any).clipboard?.dangerouslyPasteHTML?.(html)
+      } catch {
+        q.root.innerHTML = html
+      }
     }
-    const handler = () => onChangeHtml(q.root.innerHTML)
+    // Use Quill's default toolbar bindings; selection is ensured below
+    // Ensure there is always a valid selection before toolbar handlers run
+    const ensureSelection = () => {
+      const sel = q.getSelection()
+      if (!sel) {
+        const len = q.getLength()
+        q.setSelection(Math.max(0, Math.min(1, len - 1)), 0)
+      }
+    }
+    const toolbarEl = toolbarRef.current
+    if (toolbarEl) {
+      const onToolbarMouseDown = () => ensureSelection()
+      toolbarEl.addEventListener('mousedown', onToolbarMouseDown, { capture: true })
+      // Cleanup listeners on unmount
+      ;(q as any).__toolbarCleanup = () => {
+        toolbarEl.removeEventListener('mousedown', onToolbarMouseDown, { capture: true } as any)
+      }
+    }
+    const handler = () => {
+      skipHtmlSyncRef.current = true
+      onChangeHtml(q.root.innerHTML)
+    }
     q.on('text-change', handler)
     return () => {
       q.off('text-change', handler)
       // @ts-expect-error cleanup
       q?.destroy?.()
+      // Detach toolbar listeners if present
+      try {
+        ;(q as any).__toolbarCleanup?.()
+      } catch {
+        // ignore
+      }
       quillRef.current = null
     }
   }, [])
@@ -42,8 +81,21 @@ export default function QuillEditor({ html, onChangeHtml, readOnly }: Props) {
   useEffect(() => {
     const q = quillRef.current
     if (!q) return
-    if (q.root.innerHTML.trim() !== (html || '').trim()) {
-      q.root.innerHTML = html || ''
+    if (skipHtmlSyncRef.current) {
+      // This update originated from Quill; don't overwrite it.
+      skipHtmlSyncRef.current = false
+      return
+    }
+    const next = (html || '').trim()
+    const curr = q.root.innerHTML.trim()
+    if (curr === next) return
+    const sel = q.getSelection()
+    try {
+      ;(q as any).clipboard?.dangerouslyPasteHTML?.(next)
+      if (sel) q.setSelection(sel.index, sel.length, 'silent')
+    } catch {
+      q.root.innerHTML = next
+      if (sel) q.setSelection(sel.index, sel.length, 'silent')
     }
   }, [html])
 
@@ -69,7 +121,6 @@ export default function QuillEditor({ html, onChangeHtml, readOnly }: Props) {
           <button className="ql-italic" />
           <button className="ql-underline" />
           <button className="ql-strike" />
-          <button className="ql-underline" />
           <button className="ql-link" />
         </span>
         <span className="ql-formats">
@@ -110,5 +161,6 @@ export default function QuillEditor({ html, onChangeHtml, readOnly }: Props) {
     </div>
   )
 }
+
 
 
