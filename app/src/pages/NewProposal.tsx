@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
 import QuillEditor from '../components/QuillEditor'
+import MarkdownPreview from '../components/MarkdownPreview'
 import { composeProposalMarkdown } from '../utils/proposalMarkdown'
 import { htmlToMarkdown } from '../utils/proposalMarkdown'
 import { createProposalOnHub } from '../web3/governanceHubActions'
@@ -96,7 +97,13 @@ export default function NewProposal() {
                   style={{ width: '100%', marginBottom: 16 }}
                 />
                 <label style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>Proposal:</label>
-                <QuillEditor html={bodyHtml} onChangeHtml={setBodyHtml} readOnly={showPreview} />
+                {!showPreview ? (
+                  <QuillEditor html={bodyHtml} onChangeHtml={setBodyHtml} readOnly={false} />
+                ) : (
+                  <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, background: '#fff' }}>
+                    <MarkdownPreview markdown={htmlToMarkdown(bodyHtml || '')} />
+                  </div>
+                )}
                 <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <button
                     type="button"

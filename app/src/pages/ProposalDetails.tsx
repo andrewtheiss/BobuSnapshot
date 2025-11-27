@@ -16,6 +16,9 @@ import {
 } from '../web3/governanceHubActions'
 import MarkdownPreview from '../components/MarkdownPreview'
 import { parseProposalMarkdown } from '../utils/proposalMarkdown'
+import QuillEditor from '../components/QuillEditor'
+import { htmlToMarkdown } from '../utils/proposalMarkdown'
+import { ADMIN_ADDRESSES } from '../config/environment'
 
 function formatTime(tsSeconds: number): string {
   const d = new Date(tsSeconds * 1000)
@@ -39,13 +42,15 @@ export default function ProposalDetailsPage() {
   const [commentOffset, setCommentOffset] = useState(0)
   const [hasMoreComments, setHasMoreComments] = useState(true)
 
-  const [newComment, setNewComment] = useState('')
+  const [newCommentHtml, setNewCommentHtml] = useState('')
+  const [showCommentPreview, setShowCommentPreview] = useState(false)
   const [newSentiment, setNewSentiment] = useState<number>(3)
   const [commentSubmitting, setCommentSubmitting] = useState(false)
   const [commentNotice, setCommentNotice] = useState<string | null>(null)
   const [commentError, setCommentError] = useState<string | null>(null)
   const [canComment, setCanComment] = useState<boolean | null>(null)
   const { address, isConnected } = useAccount()
+  const currentAddressLower = address?.toLowerCase() ?? ''
 
   useEffect(() => {
     document.body.classList.add('governance-light')
@@ -185,7 +190,7 @@ export default function ProposalDetailsPage() {
                   <>
                     <h2 style={{ margin: 0, fontSize: 24 }}>{title}</h2>
                     <div style={{ color: '#6b7280', marginTop: 6, fontSize: 14 }}>{detailsMeta}</div>
-                    {isConnected && (
+                    {isConnected && (currentAddressLower && (currentAddressLower === (author ?? '').toLowerCase() || ADMIN_ADDRESSES.has(currentAddressLower))) && (
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
                         <button
                           type="button"
@@ -299,14 +304,13 @@ export default function ProposalDetailsPage() {
                 {isConnected && (canComment === true || canComment === null) && (
                   <>
                     <label style={{ display: 'block', fontWeight: 600, marginBottom: 8 }}>Content</label>
-                    <textarea
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      className="snapshot-input"
-                      rows={6}
-                      placeholder="Write your comment…"
-                      style={{ width: '100%', font: 'inherit' }}
-                    />
+                    {!showCommentPreview ? (
+                      <QuillEditor html={newCommentHtml} onChangeHtml={setNewCommentHtml} />
+                    ) : (
+                      <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, background: '#fff' }}>
+                        <MarkdownPreview markdown={htmlToMarkdown(newCommentHtml || '')} />
+                      </div>
+                    )}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
                       <label style={{ fontSize: 13, color: '#6b7280' }}>
                         Sentiment:{' '}
@@ -325,9 +329,17 @@ export default function ProposalDetailsPage() {
                       <button
                         type="button"
                         className="snapshot-header-button"
+                        onClick={() => setShowCommentPreview((v) => !v)}
+                      >
+                        {showCommentPreview ? 'Edit' : 'Preview'}
+                      </button>
+                      <button
+                        type="button"
+                        className="snapshot-header-button"
                         onClick={async () => {
                           if (!proposalAddr) return
-                          const content = newComment.trim()
+                          const contentHtml = newCommentHtml.trim()
+                          const content = htmlToMarkdown(contentHtml)
                           if (!content) {
                             setCommentError('Comment cannot be empty.')
                             return
@@ -336,7 +348,7 @@ export default function ProposalDetailsPage() {
                             setCommentSubmitting(true)
                             setCommentError(null)
                             await addComment({ proposal: proposalAddr, content, sentiment: newSentiment })
-                            setNewComment('')
+                            setNewCommentHtml('')
                             setNewSentiment(3)
                             setCommentNotice('Comment submitted. Reloading…')
                             setTimeout(() => window.location.reload(), 900)

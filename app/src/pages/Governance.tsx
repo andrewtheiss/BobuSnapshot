@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAccount, useConnect, useDisconnect } from 'wagmi'
 import './Governance.css'
 import bobuAvatar from '../assets/bobuthefarmer.webp'
-import { APP_ENV, IS_MAINNET, IS_TESTNET } from '../config/environment'
+import { APP_ENV, IS_MAINNET, IS_TESTNET, ADMIN_ADDRESSES } from '../config/environment'
 import { hasToken, mintDevToken, submitProposal, type Address } from '../web3/proposalContractActions'
 import {
   getProposalCountByState,
@@ -155,12 +155,10 @@ function DevFooter() {
   const [checking, setChecking] = useState(false)
   const [hasAccessToken, setHasAccessToken] = useState<boolean | null>(null)
 
-  const isLocalhost =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  const isSepolia = IS_TESTNET
 
   useEffect(() => {
-    if (!isLocalhost || !isConnected || !address) {
+    if (!isSepolia || !isConnected || !address) {
       setHasAccessToken(null)
       return
     }
@@ -187,9 +185,9 @@ function DevFooter() {
     return () => {
       cancelled = true
     }
-  }, [address, isConnected, isLocalhost])
+  }, [address, isConnected, isSepolia])
 
-  if (!isLocalhost) {
+  if (!isSepolia || !isConnected) {
     return null
   }
 
@@ -219,7 +217,7 @@ function DevFooter() {
     <footer className="dev-footer" aria-label="Developer tools">
       <div className="dev-footer-inner">
         <div className="dev-footer-group">
-          <span className="dev-footer-pill">Dev tools (localhost only)</span>
+          <span className="dev-footer-pill">Dev tools (sepolia)</span>
           <span className="dev-footer-label">
             Env: <strong>{envLabel}</strong>
           </span>
@@ -260,8 +258,13 @@ function ProposalRow({
   status,
   snippet,
   onScheduleClick,
-}: Proposal & { onScheduleClick?: (id: string) => void }) {
+  currentAddressLower,
+  isAdmin,
+}: Proposal & { onScheduleClick?: (id: string) => void; currentAddressLower?: string; isAdmin?: boolean }) {
   const shortAuthor = `${author.slice(0, 6)}...${author.slice(-4)}`
+  const isMineOrAdmin =
+    Boolean(currentAddressLower) &&
+    (currentAddressLower === author.toLowerCase() || Boolean(isAdmin))
 
   return (
     <article className="proposal-row">
@@ -280,10 +283,14 @@ function ProposalRow({
               {shortAuthor} <span className="proposal-row-badge">admin</span>
             </a>
           </span>
-          <span className="proposal-row-dot">·</span>
-          <span>{votes} votes</span>
-          <span className="proposal-row-dot">·</span>
-          <span>{quorum}% quorum</span>
+          {status !== 'draft' && (
+            <>
+              <span className="proposal-row-dot">·</span>
+              <span>{votes} votes</span>
+              <span className="proposal-row-dot">·</span>
+              <span>{quorum}% quorum</span>
+            </>
+          )}
           <span className="proposal-row-dot">·</span>
           <span>{timeAgo}</span>
           {hasVoted && (
@@ -292,7 +299,7 @@ function ProposalRow({
               <span className="proposal-row-voted">You voted</span>
             </>
           )}
-          {onScheduleClick && (
+          {onScheduleClick && isMineOrAdmin && (
             <>
               <span className="proposal-row-dot">·</span>
               <button
@@ -331,6 +338,8 @@ export default function GovernancePage() {
   const [submitting, setSubmitting] = useState<boolean>(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const { address, isConnected } = useAccount()
+  const currentAddressLower = address?.toLowerCase() ?? ''
+  const isAdmin = ADMIN_ADDRESSES.has(currentAddressLower)
   const [hasAccessToken, setHasAccessToken] = useState<boolean>(false)
   const [checkingAccess, setCheckingAccess] = useState<boolean>(false)
   const [scheduleForId, setScheduleForId] = useState<string | null>(null)
@@ -685,6 +694,8 @@ export default function GovernancePage() {
                     <ProposalRow
                       key={proposal.id}
                       {...proposal}
+                      currentAddressLower={currentAddressLower}
+                      isAdmin={isAdmin}
                       onScheduleClick={(id) => {
                         setScheduleForId(id)
                         // Default schedule values: now → +7d

@@ -20,4 +20,13 @@ import { mainnet, sepolia } from 'wagmi/chains'
 export type ActiveChainId = typeof mainnet.id | typeof sepolia.id
 export const ACTIVE_CHAIN_ID: ActiveChainId = ACTIVE_ENV === 'testnet' ? sepolia.id : mainnet.id
 
+// Optional: comma-separated admin addresses (lowercased) e.g. "0xabc...,0xdef..."
+const ADMIN_ADDRESSES_RAW =
+  ((import.meta.env.VITE_ADMIN_ADDRESSES as string | undefined) ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+
+export const ADMIN_ADDRESSES: Set<string> = new Set(ADMIN_ADDRESSES_RAW)
+
 

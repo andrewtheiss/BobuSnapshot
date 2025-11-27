@@ -14,6 +14,23 @@ body.governance-light #root {
   display: flex;
   flex-direction: column;
   background-color: #ffffff;
+  position: relative;
+}
+
+.governance-root::after {
+  content: "";
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  width: clamp(120px, 26vw, 240px);
+  height: clamp(120px, 26vw, 240px);
+  background-image: var(--governance-bg-gif, url('/assets/bobu.gif'));
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: right bottom;
+  pointer-events: none;
+  opacity: 0.95;
+  z-index: 5;
 }
 
 .snapshot-layout {
@@ -83,6 +100,18 @@ body.governance-light #root {
   max-width: 1120px;
   margin-left: auto;
   margin-right: auto;
+}
+
+.governance-root,
+.snapshot-main {
+  width: 100%;
+}
+
+/* Ensure a comfortable minimum width on desktop-sized viewports */
+@media (min-width: 800px) {
+  .snapshot-main {
+    min-width: 800px;
+  }
 }
 
 .snapshot-header {
@@ -665,6 +694,90 @@ body.governance-light #root {
 
   .proposal-row {
     padding: 20px 20px;
+  }
+
+  .governance-root::after {
+    width: clamp(110px, 34vw, 180px);
+    height: clamp(110px, 34vw, 180px);
+    opacity: 0.9;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    right: max(10px, env(safe-area-inset-right));
+  }
+}
+
+/* Tighten spacing and typography on small phones */
+@media (max-width: 480px) {
+  .snapshot-header {
+    padding: 12px 16px;
+    gap: 12px;
+  }
+  .snapshot-header-name {
+    font-size: 18px;
+  }
+  .snapshot-header-button {
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+  .snapshot-content {
+    padding: 16px 16px 56px;
+  }
+  .space-hero {
+    height: 100px;
+    border-radius: 20px;
+  }
+  .space-summary {
+    gap: 16px;
+    padding: 16px;
+    margin-top: -36px;
+    border-radius: 20px;
+  }
+  .space-summary-title h1 {
+    font-size: 24px;
+  }
+  .space-summary-description {
+    font-size: 14px;
+  }
+  .space-summary-stats {
+    gap: 6px;
+    font-size: 13px;
+  }
+  .space-summary-avatar {
+    width: 60px;
+    height: 60px;
+    border-width: 3px;
+  }
+  .proposal-row {
+    gap: 12px;
+    padding: 16px;
+  }
+  .proposal-row-title {
+    font-size: 16px;
+  }
+  .proposal-row-meta {
+    font-size: 13px;
+    gap: 4px;
+  }
+  .proposal-pagination {
+    gap: 4px;
+    padding: 14px;
+  }
+  .dev-footer {
+    padding: 8px 16px;
+  }
+  .dev-footer-inner {
+    gap: 8px;
+  }
+  .dev-footer-button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .governance-root::after {
+    width: clamp(96px, 40vw, 150px);
+    height: clamp(96px, 40vw, 150px);
+    opacity: 0.85;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    right: max(8px, env(safe-area-inset-right));
   }
 }
 
