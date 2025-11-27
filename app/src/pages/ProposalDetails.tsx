@@ -173,8 +173,10 @@ export default function ProposalDetailsPage() {
         <div className="snapshot-main" style={{ width: '100%' }}>
           <header className="snapshot-header">
             <div className="snapshot-header-space">
-              <img src={bobuAvatar} alt="Bobu avatar" className="snapshot-header-avatar" />
-              <span className="snapshot-header-name">Bobu</span>
+              <a href="#/" className="snapshot-header-home" aria-label="Go to homepage" style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'inherit', textDecoration: 'none' }}>
+                <img src={bobuAvatar} alt="Bobu avatar" className="snapshot-header-avatar" />
+                <span className="snapshot-header-name">Bobu</span>
+              </a>
             </div>
             <div className="snapshot-header-actions">
               <a href="#/s:bobu.eth" className="snapshot-header-button">Back</a>

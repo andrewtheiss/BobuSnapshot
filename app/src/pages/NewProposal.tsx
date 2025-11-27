@@ -4,7 +4,7 @@ import QuillEditor from '../components/QuillEditor'
 import MarkdownPreview from '../components/MarkdownPreview'
 import { composeProposalMarkdown } from '../utils/proposalMarkdown'
 import { htmlToMarkdown } from '../utils/proposalMarkdown'
-import { createProposalOnHub } from '../web3/governanceHubActions'
+import { createProposalAndGetAddress } from '../web3/governanceHubActions'
 import bobuAvatar from '../assets/bobuthefarmer.webp'
 
 export default function NewProposal() {
@@ -44,9 +44,9 @@ export default function NewProposal() {
       const bodyMarkdown = htmlToMarkdown(trimmedBodyHtml)
       const fullMarkdown = composeProposalMarkdown(trimmedTitle, address, bodyMarkdown)
       // Create as DRAFT by default (0,0); you can schedule on the main page
-      await createProposalOnHub(trimmedTitle, fullMarkdown, 0, 0)
-      setSubmitNotice('Submitted. Reloading…')
-      setTimeout(() => window.location.reload(), 900)
+      const addr = await createProposalAndGetAddress(trimmedTitle, fullMarkdown, 0, 0)
+      setSubmitNotice('Submitted. Redirecting…')
+      window.location.hash = `#/proposal/${addr}`
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       const lower = message.toLowerCase()
@@ -77,8 +77,10 @@ export default function NewProposal() {
         <div className="snapshot-main">
           <header className="snapshot-header">
             <div className="snapshot-header-space">
-              <img src={bobuAvatar} alt="Bobu avatar" className="snapshot-header-avatar" />
-              <span className="snapshot-header-name">Bobu</span>
+              <a href="#/" className="snapshot-header-home" aria-label="Go to homepage" style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'inherit', textDecoration: 'none' }}>
+                <img src={bobuAvatar} alt="Bobu avatar" className="snapshot-header-avatar" />
+                <span className="snapshot-header-name">Bobu</span>
+              </a>
             </div>
             <div className="snapshot-header-actions"></div>
           </header>

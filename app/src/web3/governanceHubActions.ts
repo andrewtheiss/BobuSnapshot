@@ -1,8 +1,9 @@
-import { readContract, writeContract } from 'wagmi/actions'
+import { readContract, writeContract, waitForTransactionReceipt } from 'wagmi/actions'
 import { ACTIVE_CONTRACTS } from '../config/contracts'
 import { wagmiConfig } from './wagmi'
 import { ABIS } from '../abis'
 import { ACTIVE_CHAIN_ID } from '../config/environment'
+import { parseEventLogs, type Abi } from 'viem'
 
 export type Address = `0x${string}`
 
@@ -192,6 +193,32 @@ export async function createProposalOnHub(title: string, body: string, voteStart
     args: [title, body, BigInt(voteStart), BigInt(voteEnd)],
     chainId: ACTIVE_CHAIN_ID,
   })
+}
+
+export async function createProposalAndGetAddress(
+  title: string,
+  body: string,
+  voteStart: number,
+  voteEnd: number
+): Promise<Address> {
+  ensureHubConfigured()
+  const hash = await writeContract(wagmiConfig, {
+    address: ACTIVE_CONTRACTS.governanceHub.address,
+    abi: ABIS.GovernanceHub,
+    functionName: 'createProposal',
+    args: [title, body, BigInt(voteStart), BigInt(voteEnd)],
+    chainId: ACTIVE_CHAIN_ID,
+  })
+  const receipt = await waitForTransactionReceipt(wagmiConfig, { hash, chainId: ACTIVE_CHAIN_ID })
+  const events = parseEventLogs({
+    abi: ABIS.GovernanceHub as unknown as Abi,
+    logs: receipt.logs,
+    eventName: 'ProposalCreated',
+  }) as unknown as Array<{ eventName: 'ProposalCreated'; args: { proposal: Address } }>
+  const created = events.find((e) => e.eventName === 'ProposalCreated')
+  const addr = created?.args?.proposal
+  if (addr) return addr
+  throw new Error('Proposal address not found in transaction receipt.')
 }
 
 // --------------------------

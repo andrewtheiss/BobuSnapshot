@@ -630,6 +630,22 @@ body.governance-light #root {
   color: #6b7280;
 }
 
+.dev-footer-link {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+}
+.dev-footer-link:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+.dev-footer-dot {
+  color: #d1d5db;
+}
+.dev-footer-note {
+  color: #6b7280;
+}
+
 @media (max-width: 1200px) {
   .snapshot-main {
     margin-left: auto;

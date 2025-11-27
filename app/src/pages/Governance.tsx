@@ -58,8 +58,10 @@ function SnapshotHeader({
   return (
     <header className="snapshot-header">
       <div className="snapshot-header-space">
-        <img src={bobuAvatar} alt="Bobu avatar" className="snapshot-header-avatar" />
-        <span className="snapshot-header-name">Bobu</span>
+        <a href="#/" className="snapshot-header-home" aria-label="Go to homepage" style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'inherit', textDecoration: 'none' }}>
+          <img src={bobuAvatar} alt="Bobu avatar" className="snapshot-header-avatar" />
+          <span className="snapshot-header-name">Bobu</span>
+        </a>
         </div>
 
       {/* Search bubble hidden for now */}
@@ -233,11 +235,24 @@ function DevFooter() {
                     : 'you do not have the token'}
             </span>
           )}
+          <span className="dev-footer-dot">·</span>
+          <a
+            href="https://github.com/andrewtheiss/BobuSnapshot"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="dev-footer-link"
+          >
+            GitHub
+          </a>
+          <span className="dev-footer-dot">·</span>
+          <span className="dev-footer-note">
+            Bobu Ideas is a Bobu Community Project under sake.exchange
+          </span>
         </div>
         {IS_TESTNET && (
           <div className="dev-footer-actions">
             <button type="button" className="dev-footer-button" onClick={handleMint}>
-              Mint test access token
+              Mint Testnet Bobu
             </button>
             {status && <span className="dev-footer-status">{status}</span>}
           </div>

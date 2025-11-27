@@ -426,6 +426,7 @@ def test_admin_delete_comment_direct(governance_hub, accounts, project):
         commenter.address,
         "Comment to delete",
         created_at,
+        3,
         sender=deployer,
     )
 
@@ -543,11 +544,11 @@ def test_metrics_counts_and_unique_users(governance_hub, accounts, chain, projec
     hub.adminMoveState(p3, 1, sender=bobu)  # STATE_OPEN
 
     # Add comments by a new user (c) and an existing user (a)
-    hub.addComment(p3, "c's comment", sender=c)
+    hub.addComment(p3, "c's comment", 3, sender=c)
     assert hub.totalComments() == 1
     assert hub.uniqueUsers() == 3
 
-    hub.addComment(p3, "a's comment", sender=a)
+    hub.addComment(p3, "a's comment", 3, sender=a)
     assert hub.totalComments() == 2
     # Unique users unchanged (a already counted)
     assert hub.uniqueUsers() == 3
@@ -566,7 +567,7 @@ def test_metrics_counts_and_unique_users(governance_hub, accounts, chain, projec
     # Admin delete comment should NOT change totalComments (we count cumulative created)
     # Deploy a separate comment instance to satisfy interface and run delete
     comment = deployer.deploy(project.CommentTemplate)
-    comment.initialize(hub.address, p3, c.address, "to delete", now + 1, sender=deployer)
+    comment.initialize(hub.address, p3, c.address, "to delete", now + 1, 3, sender=deployer)
     hub.adminDeleteComment(p3, comment.address, sender=bobu)
     assert hub.totalComments() == 2
 
